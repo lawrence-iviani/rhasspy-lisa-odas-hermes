@@ -7,17 +7,17 @@ RUN apt-get update && \
         python3 python3-dev python3-setuptools python3-pip python3-venv \
         build-essential portaudio19-dev
 
-ENV APP_DIR=/usr/lib/rhasspy-microphone-pyaudio-hermes
+ENV APP_DIR=/usr/lib/rhasspy-lisa-odas-hermes
 ENV BUILD_DIR=/build
 
 # Copy source
-COPY rhasspymicrophone_pyaudio_hermes/ ${BUILD_DIR}/rhasspymicrophone_pyaudio_hermes/
+COPY rhasspy_lisa_odas_hermes/ ${BUILD_DIR}/rhasspy_lisa_odas_hermes/
 
 # Autoconf
 COPY m4/ ${BUILD_DIR}/m4/
 COPY configure config.sub config.guess \
      install-sh missing aclocal.m4 \
-     Makefile.in setup.py requirements.txt rhasspy-microphone-pyaudio-hermes.in \
+     Makefile.in setup.py requirements.txt rhasspy-lisa-odas-hermes.in \
      ${BUILD_DIR}/
 
 RUN cd ${BUILD_DIR} && \
@@ -43,8 +43,8 @@ RUN apt-get update && \
         python3 libpython3.7 \
         libportaudio2
 
-ENV APP_DIR=/usr/lib/rhasspy-microphone-pyaudio-hermes
+ENV APP_DIR=/usr/lib/rhasspy-lisa-odas-hermes
 COPY --from=build ${APP_DIR}/ ${APP_DIR}/
-COPY --from=build /build/rhasspy-microphone-pyaudio-hermes /usr/bin/
+COPY --from=build /build/rhasspy-lisa-odas-hermes /usr/bin/
 
-ENTRYPOINT ["bash", "/usr/bin/rhasspy-microphone-pyaudio-hermes"]
+ENTRYPOINT ["bash", "/usr/bin/rhasspy-lisa-odas-hermes"]

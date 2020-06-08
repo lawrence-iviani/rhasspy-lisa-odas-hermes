@@ -1,8 +1,8 @@
-Package: rhasspy-microphone-pyaudio-hermes
+Package: rhasspy-lisa-odas-hermes
 Version: ${version}
 Section: utils
 Priority: optional
 Depends: alsa-utils
 Architecture: ${architecture}
-Maintainer: Michael Hansen
-Description: Hermes MQTT service for Rhasspy microphone recording using PyAudio
+Maintainer: Lawrence Iviani
+Description: Hermes MQTT service for Rhasspy ODAS Lisa multi channel receiver

@@ -4,7 +4,7 @@ in_place="@IN_PLACE@"
 if [[ "${in_place}" == 'yes' ]]; then
     # Run directly from source code
     this_dir="$( cd "$( dirname "$0" )" && pwd )"
-    "${this_dir}/bin/rhasspy-microphone-pyaudio-hermes" "$@"
+    "${this_dir}/bin/rhasspy-lisa-odas-hermes" "$@"
 else
     # Use virtual environment as a prefix
     prefix="@prefix@"
@@ -19,5 +19,5 @@ else
 
     export PATH="${prefix}/bin:${PATH}"
 
-    rhasspy-microphone-pyaudio-hermes "$@"
+    rhasspy-lisa-odas-hermes "$@"
 fi

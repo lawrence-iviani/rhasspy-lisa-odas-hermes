@@ -23,7 +23,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="rhasspymicrophone_pyaudio_hermes",
+    name="rhasspy_lisa_audio_hermes",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -37,5 +37,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=True,
-    name="rhasspymicrophone_pyaudio_hermes",
+    name="rhasspy_lisa_odas_hermes",
 )

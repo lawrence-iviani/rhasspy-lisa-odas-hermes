@@ -19,5 +19,5 @@ docker buildx build \
        "${src_dir}" \
        "--platform=${PLATFORMS}" \
        --build-arg "DOCKER_REGISTRY=${DOCKER_REGISTRY}" \
-       --tag "${DOCKER_REGISTRY}/rhasspy/rhasspy-microphone-pyaudio-hermes:${version}" \
+       --tag "${DOCKER_REGISTRY}/rhasspy/rhasspy-lisa-odas-hermes:${version}" \
        --push

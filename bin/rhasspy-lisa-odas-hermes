@@ -12,4 +12,4 @@ if [[ -d "${venv}" ]]; then
 fi
 
 export PYTHONPATH="${src_dir}:${PYTHONPATH}"
-python3 -m rhasspymicrophone_pyaudio_hermes "$@"
+python3 -m rhasspy_lisa_odas_hermes "$@"

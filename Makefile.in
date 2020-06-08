@@ -10,7 +10,7 @@
 # List whatever files you want to include in your source distribution here.
 # You can include whole directories but note that *everything* under that
 # directory will be included
-DISTFILES = PKG-INFO Makefile.in configure install-sh rhasspy-microphone-pyaudio-hermes
+DISTFILES = PKG-INFO Makefile.in configure install-sh rhasspy-lisa-odas-hermes
 
 DESTDIR =
 PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
@@ -89,7 +89,7 @@ ifeq ($(IN_PLACE),yes)
 else # IN_PLACE == yes
 	"$(INSTALL_PYTHON)" -m pip install $(PIP_INSTALL_ARGS) "$(srcdir)"
 endif # IN_PLACE == yes
-	chmod +x "$(srcdir)/rhasspy-microphone-pyaudio-hermes"
+	chmod +x "$(srcdir)/rhasspy-lisa-odas-hermes"
 
 # -----------------------------------------------------------------------------
 

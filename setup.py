@@ -1,4 +1,4 @@
-"""Setup file for rhasspymicrophone_pyaudio_hermes"""
+"""Setup file for rhasspy_lisa_odas_hermes"""
 import os
 
 import setuptools
@@ -14,16 +14,16 @@ with open(os.path.join(this_dir, "VERSION"), "r") as version_file:
     version = version_file.read().strip()
 
 setuptools.setup(
-    name="rhasspy-microphone-pyaudio-hermes",
+    name="rhasspy-lisa-odas-hermes",
     version=version,
-    author="Michael Hansen",
-    author_email="hansen.mike@gmail.com",
-    url="https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes",
+    author="Lawrence Iviani",
+    author_email="lawrence.iviani@gmail.com",
+    url="https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes",
     packages=setuptools.find_packages(),
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "rhasspy-microphone-pyaudio-hermes = rhasspymicrophone_pyaudio_hermes.__main__:main"
+            "rhasspy-lisa-odas-hermes = rhasspy_lisa_odas_hermes.__main__:main"
         ]
     },
     classifiers=[

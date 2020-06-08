@@ -1,4 +1,4 @@
-AC_INIT([rhasspy-microphone-pyaudio-hermes], [0.1.0], [mike@rhasspy.org])
+AC_INIT([rhasspy-lisa-odas-hermes], [0.1.0], [mike@rhasspy.org])
 AC_CONFIG_MACRO_DIR([m4])
 PC_INIT([3.7.0])
 
@@ -7,7 +7,7 @@ dnl ---------------------------------------------------------------------------
 AC_PREFIX_DEFAULT([$PWD/.venv])
 
 dnl Template files to write
-AC_CONFIG_FILES([Makefile rhasspy-microphone-pyaudio-hermes])
+AC_CONFIG_FILES([Makefile rhasspy-lisa-odas-hermes])
 
 AC_CANONICAL_HOST
 AC_PROG_INSTALL

@@ -25,11 +25,11 @@ from rhasspyhermes.audioserver import (
 from rhasspyhermes.base import Message
 from rhasspyhermes.client import GeneratorType, HermesClient
 
-_LOGGER = logging.getLogger("rhasspymicrophone_pyaudio_hermes")
+_LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
 
 
 class MicrophoneHermesMqtt(HermesClient):
-    """Hermes MQTT server for Rhasspy microphone input using external program."""
+    """Hermes MQTT server for Rhasspy Lisa ODAS input using external lib."""
 
     def __init__(
         self,
@@ -46,7 +46,7 @@ class MicrophoneHermesMqtt(HermesClient):
         vad_mode: int = 3,
     ):
         super().__init__(
-            "rhasspymicrophone_pyaudio_hermes",
+            "rhasspy-lisa-odas-hermes",
             client,
             sample_rate=sample_rate,
             sample_width=sample_width,

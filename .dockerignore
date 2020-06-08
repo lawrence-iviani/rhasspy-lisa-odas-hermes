@@ -9,7 +9,7 @@
 !missing
 !m4/
 !Makefile.in
-!rhasspy-microphone-pyaudio-hermes.in
+!rhasspy-lisa-odas-hermes.in
 
 !requirements.txt
 !setup.py
@@ -17,4 +17,4 @@
 !README.md
 !LICENSE
 
-!rhasspymicrophone_pyaudio_hermes/*.py
+!rhasspy_lisa_odas_hermes/*.py

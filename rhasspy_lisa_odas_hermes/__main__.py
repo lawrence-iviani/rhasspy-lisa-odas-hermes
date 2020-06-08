@@ -9,12 +9,12 @@ import rhasspyhermes.cli as hermes_cli
 
 from . import MicrophoneHermesMqtt
 
-_LOGGER = logging.getLogger("rhasspymicrophone_pyaudio_hermes")
+_LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
 
 
 def main():
     """Main method."""
-    parser = argparse.ArgumentParser(prog="rhasspy-microphone-pyaudio-hermes")
+    parser = argparse.ArgumentParser(prog="rhasspy-lisa-odas-hermes")
     parser.add_argument(
         "--list-devices", action="store_true", help="List available input devices"
     )

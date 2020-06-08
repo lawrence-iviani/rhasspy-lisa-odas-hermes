@@ -19,5 +19,5 @@ docker run -it \
        --device /dev/snd:/dev/snd \
        -v "${profile_dir}":"${profile_dir}" \
        -v /etc/localtime:/etc/localtime \
-       "rhasspy/rhasspy-microphone-pyaudio-hermes:${version}" \
+       "rhasspy/rhasspy-lisa-odas-hermes:${version}" \
        "$@"
