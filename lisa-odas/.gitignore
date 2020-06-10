@@ -1,0 +1,12 @@
+demo/lisa_py_processing_engine/speech_recognition/__pycache__/
+demo/lisa_py_processing_engine/lisa/__pycache__/
+bin/
+build/
+lib/
+CMakeLists.txt/
+Makefile
+cmake_install.cmake
+include/cmake_install.cmake
+include/CMakeFiles/
+CMakeFiles/
+CMakeCache.txt

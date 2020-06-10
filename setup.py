@@ -23,7 +23,7 @@ setuptools.setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "rhasspy-lisa-odas-hermes = rhasspy_lisa_odas_hermes.__main__:main"
+            "rhasspy-lisa-odas-hermes = rhasspy_lisa_odas_hermes.s__main__:main"
         ]
     },
     classifiers=[

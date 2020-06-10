@@ -6,62 +6,250 @@ import threading
 import time
 import typing
 import wave
-from queue import Queue
-
-import pyaudio
+from queue import Queue, Full
 import webrtcvad
+
+# Import for odas
+import numpy as np
+from multiprocessing import Process, RawValue, Lock
+from sys import exit
+from time import sleep
+from _collections import deque
+from copy import deepcopy
+from subprocess import Popen
+
 from rhasspyhermes.asr import AsrStartListening, AsrStopListening
 from rhasspyhermes.audioserver import (
-    AudioDevice,
-    AudioDeviceMode,
-    AudioDevices,
-    AudioFrame,
+    AudioDevice,  # Returned in handle_get_devices
+    AudioDeviceMode,  # same
+    AudioDevices, # same
+    AudioFrame,  # publish_chunks
     AudioGetDevices,
     AudioRecordError,
     AudioSummary,
-    SummaryToggleOff,
-    SummaryToggleOn,
+    SummaryToggleOff,  # Print details
+    SummaryToggleOn,  # Print details
 )
 from rhasspyhermes.base import Message
 from rhasspyhermes.client import GeneratorType, HermesClient
 
+from lisa.lisa_switcher_bindings import SSL_struct, SSL_src_struct, SST_struct, SST_src_struct
+from lisa.lisa_switcher_bindings import callback_SSL_func, callback_SST_func, callback_SSS_S_func, lib_lisa_rcv
+from lisa.lisa_configuration import SST_TAG_LEN, MAX_ODAS_SOURCES, N_BITS_INCOME_STREAM, CHUNK_SIZE_INCOME_STREAM, \
+    SAMPLE_RATE_INCOME_STREAM, BYTES_PER_SAMPLE_INCOME_STREAM
+
 _LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
 
+# Set aggressiveness of VAD:
+# an integer between 0 and 3, 0 being the least aggressive about filtering out non-speech, 3 the most aggressive.
+DEFAULT_VAD_AGGRESSIVENESS = 3
 
-class MicrophoneHermesMqtt(HermesClient):
+# to be parametrized
+MEDIAN_WEIGHTS = [1/4, 1/2, 1/4]  # Set to none to skip, apply a median filter
+ACTIVITY_THRESHOLD = 0.1  # the min threshold for a source to being considered as active (override a bit odas behavior)
+
+# Params for collecting queue from ODAS callbacks
+MAX_QUEUE_SIZE = 10
+SLEEP_BEFORE_START_CLIENT = 0.5 # sec sync between odas tx/rx. The rx (server) is spawned first and then the tx
+# TODO: change the MULTI_THREAD in something like DEMULTIPLEXER . THis means one source is selected (e.g latest it)
+# and streamed, reagardless the number of channel
+# MULTI_THREAD = False  # TODO: This influence also how the raw data  streaming are collected
+# GLOBAL VARIABLES USED TO SHARE INFORMATION AMONG THREADS
+SSL_queue = [deque(maxlen=len(MEDIAN_WEIGHTS)) for _q in range(MAX_ODAS_SOURCES)]
+SST_queue = [deque(maxlen=len(MEDIAN_WEIGHTS)) for _q in range(MAX_ODAS_SOURCES)]
+SSL_latest = [None for _q in range(MAX_ODAS_SOURCES)]
+SST_latest = [None for _q in range(MAX_ODAS_SOURCES)]
+SSS_queue = None # Decided at runtime
+
+
+##########################
+## callback definitions ##
+##########################
+
+@callback_SSL_func
+def callback_SSL(pSSL_struct):
+    ssl_str = pSSL_struct[0]
+    # print('callback_SSL')
+    # msg = ["+++ Python SSL Struct ts={}".format(ssl_str.timestamp)]
+    # TODO: use timestamp for checking insertion??
+    for i in range(0, MAX_ODAS_SOURCES):
+        try:
+            if MEDIAN_WEIGHTS is None:
+                # Calculate the weighted median filter
+                SSL_latest[i] = (ssl_str.timestamp / 100.0, deepcopy(ssl_str.src[i]))
+            else:
+                # Calculate the weighted median filter
+                SSL_queue[i].append((ssl_str.timestamp / 100.0, deepcopy(ssl_str.src[i])))
+                x = y = z = E = 0.0
+                ts = ssl_str.timestamp / 100.0
+                for ii in range(len(SSL_queue[i])):
+                    w = MEDIAN_WEIGHTS[ii]
+                    # ts = ts + SSL_queue[i][ii][0] * w
+                    x = x + SSL_queue[i][ii][1].x * w
+                    y = y + SSL_queue[i][ii][1].y * w
+                    z = z + SSL_queue[i][ii][1].z * w
+                    E = E + SSL_queue[i][ii][1].E * w
+                SSL_latest[i] = (ts, SSL_src_struct(x=x, y=y, z=z, E=E))
+            # print("SSL_latest[{}]: {}".format(i, SSL_latest[i]))
+        except Full:
+            _LOGGER.warning("SSL queue is Full, this should not happen with deque")
+            pass
+
+
+@callback_SST_func
+def callback_SST(pSST_struct):
+    # print('callback_SST')
+    sst_str = pSST_struct[0]
+    for i in range(0, MAX_ODAS_SOURCES):
+        try:
+            if MEDIAN_WEIGHTS is None:
+                # Calculate the weighted median filter
+                SST_latest[i] = (sst_str.timestamp / 100.0, deepcopy(sst_str.src[i]))
+            else:
+                # Calculate the weighted median filter
+                SST_queue[i].append((sst_str.timestamp / 100.0, deepcopy(sst_str.src[i])))
+                x = y = z = activity = 0.0
+                ts = sst_str.timestamp / 100.0
+                id = []
+                for ii in range(len(SST_queue[i])):
+                    w = MEDIAN_WEIGHTS[ii]
+                    # ts = ts + SST_queue[i][ii][0] * w
+                    x = x + SST_queue[i][ii][1].x * w
+                    y = y + SST_queue[i][ii][1].y * w
+                    z = z + SST_queue[i][ii][1].z * w
+                    activity = activity + SST_queue[i][ii][1].activity * w
+                    id.append(SST_queue[i][ii][1].id)
+                id = np.argmax(np.bincount(id))  # The more probable
+                SST_latest[i] = (ts, SST_src_struct(x=x,y=y,z=z,activity=activity, id=id, tag=SST_queue[i][-1][1].tag)) # For tag take the latest inserted
+            # print("[{}]-SST_latest[{}]: {}".format(SST_latest[i][0], i, SST_latest[i][1]))
+        except Full:
+            _LOGGER.warning("SST queue is Full, this should not happen with deque")
+            pass
+
+
+@callback_SSS_S_func
+def callback_SSS_S(n_bytes, x):
+    """"
+    Called by the relative odas switcher stream, save in the proper SSS_queue[] the received data.
+    """
+    # print('callback_SSS_S')
+    # print("+++ Python SSS_S {} bytes in x={}".format(n_bytes, x))
+    shp = (n_bytes // BYTES_PER_SAMPLE_INCOME_STREAM // MAX_ODAS_SOURCES, MAX_ODAS_SOURCES) # shape
+    n_frames = shp[0] // CHUNK_SIZE_INCOME_STREAM  # I assume shp[0] is always a multiple integer, which in my understanding seems to be the case with odas
+    buf = np.ctypeslib.as_array(x, shape=shp)
+    # if MULTI_THREAD:
+    assert SSS_queue is not None
+    if isinstance(SSS_queue, list): # It means we want to demux the signal
+        for i in range(0, MAX_ODAS_SOURCES):
+            try:
+                for _fr in range(n_frames):  # there could be more than one frame so put in queue with the expected length
+                    _idl = _fr * CHUNK_SIZE_INCOME_STREAM
+                    _idh = _idl + CHUNK_SIZE_INCOME_STREAM
+                    _ch_buf = buf[_idl:_idh, i]
+                    # print("extract buffer source {} - frame {}. 3 samples  {} ...".format(i, _fr, _ch_buf[0:3]))
+                    SSS_queue[i].put_nowait(
+                        _ch_buf)  # eventually_ch_buf this has to be transformed in bytes or store as a byte IO?
+                # manage full queue is required?
+            except Full:
+                _LOGGER.warning("SSS_S receiving Queue_" + str(i) + " is Full, skipping frame (TODO: lost for now, change in deque!)")
+                # do nothing for now, perhaps extract the first to make space? Kind of circular queue behavior.....
+                pass
+    else:
+        try:
+            SSS_queue.put_nowait(buf)
+        except Full:
+            _LOGGER.warning("SSS_S receiving Queue is Full, skipping frame (TODO: lost for now, change in deque!)")
+            # do nothing for now, perhaps extract the first to make space? Kind of circular queue behavior.....
+            pass
+
+
+def thread_start_odas_switcher():
+    def _delayed_odas_client():
+        sleep(SLEEP_BEFORE_START_CLIENT)
+        p = Popen(['lisa-odas/bin/odaslive', '-c', 'lisa-odas/config/matrix-lisa/matrix_voice_LISA_1.cfg'])
+
+    threading.Thread(target=_delayed_odas_client, daemon=True).start()
+    retval = lib_lisa_rcv.main_loop()
+    # TODO: some time the odas subsystem crash, should be re-spawned here
+    print("Exit thread odas loop with {}".format(retval))
+
+
+# A shared counter for higher id policy
+class _HigherID(object):
+    def __init__(self, value=0):
+        # RawValue because we don't need it to create a Lock:
+        self.val = RawValue('i', value)
+        self.lock = Lock()
+
+    def increment(self):
+        with self.lock:
+            self.val.value += 1
+
+    @property
+    def value(self):
+        with self.lock:
+            return self.val.value
+
+
+    def set_value(self, value):
+        assert isinstance(value, int), "Wrong type: " + str(value.__class__)
+        with self.lock:
+            self.val.value = value
+
+
+
+###################
+## Hermes Client ##
+###################
+
+class LisaHermesMqtt(HermesClient):
     """Hermes MQTT server for Rhasspy Lisa ODAS input using external lib."""
 
     def __init__(
         self,
         client,
-        sample_rate: int,
-        sample_width: int,
-        channels: int,
+        sample_rate: int = SAMPLE_RATE_INCOME_STREAM,
+        sample_width: int = BYTES_PER_SAMPLE_INCOME_STREAM,
+        channels: int = MAX_ODAS_SOURCES,
         device_index: typing.Optional[int] = None,
-        chunk_size: int = 2048,
+        chunk_size: int = CHUNK_SIZE_INCOME_STREAM, #,2048,
         site_ids: typing.Optional[typing.List[str]] = None,
         output_site_id: typing.Optional[str] = None,
         udp_audio_host: str = "127.0.0.1",
         udp_audio_port: typing.Optional[int] = None,
-        vad_mode: int = 3,
+        vad_mode: int = DEFAULT_VAD_AGGRESSIVENESS,
+        demux: bool = False
     ):
+        print("Calling super with sample_rate={}, sample_width={} channels={} ".format(sample_rate, sample_width, channels))
+        assert 0 < channels <= MAX_ODAS_SOURCES, "Invalid number of channels {}, max is {}".format(channels, MAX_ODAS_SOURCES)
         super().__init__(
             "rhasspy-lisa-odas-hermes",
             client,
+            # TODO: mmm is it needed
             sample_rate=sample_rate,
             sample_width=sample_width,
             channels=channels,
             site_ids=site_ids,
         )
-
+        global SSS_queue
+        if demux:
+            SSS_queue = [Queue(maxsize=MAX_QUEUE_SIZE) for _q in range(MAX_ODAS_SOURCES)]
+        else:
+            SSS_queue = Queue(maxsize=MAX_QUEUE_SIZE)
         self.subscribe(AudioGetDevices, SummaryToggleOn, SummaryToggleOff)
 
-        self.sample_rate = sample_rate
-        self.sample_width = sample_width
-        self.channels = channels
+        self.sample_rate = sample_rate  # incoming stream
+        self.sample_width = sample_width # ODAS
+        if demux:
+            assert channels == 1, 'In multiplex mode only one channel is steamed, received channels=' + str(channels)
+            self.channels = 1
+        else:
+            self.channels = channels
         self.device_index = device_index
+        self.chunk_size = chunk_size
         self.frames_per_buffer = chunk_size // sample_width
         self.output_site_id = output_site_id or self.site_id
+        self.demux = demux
 
         self.udp_audio_host = udp_audio_host
         self.udp_audio_port = udp_audio_port
@@ -81,53 +269,121 @@ class MicrophoneHermesMqtt(HermesClient):
         self.summary_skip_frames = 5
         self.summary_frames_left = self.summary_skip_frames
 
+        # Register callbacks for ODAS streaming
+        lib_lisa_rcv.register_callback_SST(callback_SST)
+        lib_lisa_rcv.register_callback_SSL(callback_SSL)
+        lib_lisa_rcv.register_callback_SSS_S(callback_SSS_S)
+
         # Start threads
         if self.udp_audio_port is not None:
             self.udp_output = True
             self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            _LOGGER.debug(
-                "Audio will also be sent to UDP %s:%s",
-                self.udp_audio_host,
-                self.udp_audio_port,
-            )
+            _LOGGER.debug("Audio will also be sent to UDP %s:%s", self.udp_audio_host, self.udp_audio_port,)
             self.subscribe(AsrStartListening, AsrStopListening)
-
+        threading.Thread(target=thread_start_odas_switcher, daemon=True).start()
         threading.Thread(target=self.publish_chunks, daemon=True).start()
         threading.Thread(target=self.record, daemon=True).start()
 
     # -------------------------------------------------------------------------
-
     def record(self):
-        """Record audio from PyAudio device."""
+        """Record audio from ODAS receiver."""
+        _HIGHER_ID = _HigherID()
+
+        def _get_postion_message(source_id):
+            return {"SST": SST_latest[source_id], "SSL": SSL_latest[source_id]}
+
+        def _print_localization(n, position, audio_chunk):
+            if position['SST'] is not None and (
+                    len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD):
+                # print(position['SST'][1].tag)
+                # print("[{}]-SST_latest_".format(position['SST'][0], _n,))
+                #  position['SST'][1].tag,
+                #  position['SST'][1].activity))
+
+                print("[{}]-SST_latest_{}-id_{}: {} {}".format(position['SST'][0], n,
+                                                               position['SST'][1].id,
+                                                               position['SST'][1].tag,
+                                                               position['SST'][1].activity))
+                # print(str(audio_chunk) + '\n---------------------')
+
+        def _acquire_streaming_id(position, higher_id):
+            if position['SST'] is not None and (len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD):
+                if position['SST'][1].id >= higher_id.value:
+                    higher_id.set_value(position['SST'][1].id )
+                    # print(position['SST'][1].id , higher_id.value)
+                    return True
+                else:
+                    return False
+            else:
+                return False
+
+        # Only for demux operations
+        def _source_listening(source_id, higher_id):
+            _LOGGER.debug("Recording audio {}".format(source_id))
+            try:
+                while True:
+                    audio_chunk = SSS_queue[source_id].get().tobytes()
+                    self.raw_queue.task_done()  # sign the last job as done
+                    position = _get_postion_message(source_id)  # metadata with position. to add a subscriber
+                    if audio_chunk is None:
+                        raise Exception("Received buffer none for source_id_{}".format(
+                            source_id))  # stop processing if the main thread is done. this means data are not anymore a
+                    if _acquire_streaming_id(position, higher_id):  # source_id >= higher_id.value():
+                        self.chunk_queue.put(audio_chunk)  # + position?
+                        _print_localization(str(source_id) + '_Acquired Priority', position, audio_chunk)
+                    else:
+                        _print_localization(str(source_id) + '_Discarded(Higher is ' + str(higher_id.value) +
+                                            ')', position, audio_chunk)
+            except Exception as e:
+                print("_source_listening(" + str(source_id) + "), exception: " + str(e))
+            finally:
+                pass
+            # TODO: Profiling?
+            print("+-+-+-+-+-+-+-+-+-+-+ Stop recording audio {}, exit thread".format(source_id))
+            _LOGGER.debug("Stop recording audio {}, exit thread".format(source_id))
+
         try:
-            audio = pyaudio.PyAudio()
-
-            # Open device
-            mic = audio.open(
-                input_device_index=self.device_index,
-                channels=self.channels,
-                format=audio.get_format_from_width(self.sample_width),
-                rate=self.sample_rate,
-                input=True,
-            )
-
-            assert mic is not None
-            mic.start_stream()
-            _LOGGER.debug("Recording audio")
+            # Start Thread
+            listener_threads = []
 
             try:
-                # Read frames and publish as MQTT WAV chunks
-                while True:
-                    chunk = mic.read(self.frames_per_buffer)
-                    if chunk:
-                        self.chunk_queue.put(chunk)
-                    else:
-                        # Avoid 100% CPU
-                        time.sleep(0.01)
-            finally:
-                mic.stop_stream()
-                audio.terminate()
+                # I need to retrieve ALL available channels and simply discard (this looks not very efficient though)
+                if self.demux:
+                    for _n in range(MAX_ODAS_SOURCES):  # What about range(channels)? TODO: channels < MAX_ODAS_SOURCES in init
+                        listener_threads.append(threading.Thread(target=_source_listening, args=(_n,_HIGHER_ID,), daemon=True))
+                        listener_threads[-1].start()
+                        # listener_threads.append(_th)
+                    while True:
+                        sleep(0.5)
+                        # TODO: should I  do some check for exit?
+                else:
+                    loop = 0
+                    assert N_BITS_INCOME_STREAM == 16, \
+                        "Unsupported format, only 16 bits are accepted (this condition should be removed in future with a local cast)"
+                    while True:
+                        loop += 1
+                        audio_chunk = SSS_queue.get()
+                        # prints are for debug
+                        # print("audio_chunk_shape=" + str(audio_chunk.shape) + "\n" +str(audio_chunk)[:100] )
+                        out_chunk = np.zeros(shape=(audio_chunk.shape[0], self.channels), dtype=np.int16)
+                        for _n in range(MAX_ODAS_SOURCES):
+                            if _n < self.channels:
+                                out_chunk[:, _n] = audio_chunk[:, _n]
+                        # print("out_chunk_shape=" + str(out_chunk.shape) + "\n" + str(out_chunk)[:100] +
+                        # "\n--------------------------------------------------------\n")
+                        self.chunk_queue.put(out_chunk.tobytes())
 
+            except Exception as e:
+                print("record, exception: " + str(e))
+                _LOGGER.debug("Recording got an exception: {}".format(e))
+            finally:
+                if self.demux:
+                    for _n in range(MAX_ODAS_SOURCES):
+                        _LOGGER.debug("Recording shutdown, wait for exit acquistion thread {}".format(_n))
+                        listener_threads[_n].join()
+                        _LOGGER.debug("Thread {} exit done".format(_n))
+                    else:
+                        _LOGGER.debug("Recording shutdown")
         except Exception as e:
             _LOGGER.exception("record")
             self.publish(
@@ -221,82 +477,22 @@ class MicrophoneHermesMqtt(HermesClient):
         if get_devices.modes and (AudioDeviceMode.INPUT not in get_devices.modes):
             _LOGGER.debug("Not a request for input devices")
             return
-
+        # TODO: set this with the connection from odas if it is working
+        working = True
         devices: typing.List[AudioDevice] = []
-
-        try:
-            audio = pyaudio.PyAudio()
-
-            default_name = audio.get_default_input_device_info().get("name")
-            for device_index in range(audio.get_device_count()):
-                device_info = audio.get_device_info_by_index(device_index)
-                device_name = device_info.get("name")
-                if device_name == default_name:
-                    device_name += "*"
-
-                working: typing.Optional[bool] = None
-                if get_devices.test:
-                    working = self.get_microphone_working(
-                        device_name, device_index, audio
-                    )
-
-                devices.append(
-                    AudioDevice(
-                        mode=AudioDeviceMode.INPUT,
-                        id=str(device_index),
-                        name=device_name,
-                        description="",
-                        working=working,
-                    )
-                )
-        except Exception as e:
-            _LOGGER.exception("handle_get_devices")
-            yield AudioRecordError(
-                error=str(e), context=get_devices.id, site_id=get_devices.site_id
+        devices.append(
+            AudioDevice(
+                mode=AudioDeviceMode.INPUT,
+                id=str(0),
+                name="ODAS_LISA Receiver",
+                description="A demultiplexer for receive multiple channel",
+                working=working,
             )
-        finally:
-            audio.terminate()
+        )
 
         yield AudioDevices(
             devices=devices, id=get_devices.id, site_id=get_devices.site_id
         )
-
-    def get_microphone_working(
-        self,
-        device_name: str,
-        device_index: int,
-        audio: pyaudio.PyAudio,
-        chunk_size: int = 1024,
-    ) -> bool:
-        """Record some audio from a microphone and check its energy."""
-        try:
-            # read audio
-            pyaudio_stream = audio.open(
-                input_device_index=device_index,
-                channels=self.channels,
-                format=audio.get_format_from_width(self.sample_width),
-                rate=self.sample_rate,
-                input=True,
-            )
-
-            try:
-                audio_data = pyaudio_stream.read(chunk_size)
-                if not pyaudio_stream.is_stopped():
-                    pyaudio_stream.stop_stream()
-            finally:
-                pyaudio_stream.close()
-
-            debiased_energy = AudioSummary.get_debiased_energy(audio_data)
-
-            # probably actually audio
-            return debiased_energy > 30
-        except Exception:
-            _LOGGER.exception("get_microphone_working ({device_name})")
-            pass
-
-        return False
-
-    # -------------------------------------------------------------------------
 
     async def on_message_blocking(
         self,
