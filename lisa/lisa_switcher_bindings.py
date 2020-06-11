@@ -2,11 +2,21 @@ import numpy as np
 import numpy.ctypeslib as npct
 import ctypes
 import os.path
+import sys
 
-from lisa.lisa_configuration import SST_TAG_LEN, MAX_ODAS_SOURCES, ODAS_RCV_LIB
+from lisa.lisa_configuration import config
+
+
+SST_TAG_LEN = int(config['ODAS']['SST_tag_len'])
+MAX_ODAS_SOURCES = int(config['INCOME_STREAM']['n_sources'])
+ODAS_RCV_LIB = config['ODAS']['library']
 
 pTag = ctypes.create_string_buffer(SST_TAG_LEN)
 
+if os.path.exists(ODAS_RCV_LIB):
+    print('{} doesnt exist (actual folder is {})'.format(ODAS_RCV_LIB , os.path.dirname(os.path.realpath(__file__))))
+    sys.exit(-100)
+print("Open file RCV lib {} - {}".format(ODAS_RCV_LIB, os.path.dirname(__file__)))
 lib_lisa_rcv = npct.load_library(ODAS_RCV_LIB, os.path.dirname(__file__))
 lib_lisa_rcv.main_loop.restype = ctypes.c_int
 lib_lisa_rcv.main_loop.argtypes = None
@@ -15,7 +25,6 @@ lib_lisa_rcv.main_loop.argtypes = None
 ##################
 ## callback_SSL ##
 ##################
-# 1.
 # struct SSL_src_struct {
 # double x;
 # double y;
@@ -40,7 +49,7 @@ class SSL_struct(ctypes.Structure):
     def __str__(self):
         return "SSL_[{}]-{}".format(self.timestamp, str(self.src))
 
-# 3.
+
 # void callback_SSL(SSL_struct* data);	
 callback_SSL_func = ctypes.CFUNCTYPE(
     None,  # return
@@ -97,7 +106,6 @@ callback_SST_func = ctypes.CFUNCTYPE(
 )
 
 # 4.
-# define SST register and callback args and output
 lib_lisa_rcv.callback_SST.restype = None  # with  C++ compiler be sure it is declared as extern "C"
 lib_lisa_rcv.callback_SST.argtypes = [ctypes.POINTER(SST_struct)]  # [array_1d_double, .c_int]
 lib_lisa_rcv.register_callback_SST.restype = None
@@ -116,7 +124,7 @@ callback_SSS_S_func = ctypes.CFUNCTYPE(
     ctypes.POINTER(ctypes.c_short)
 )
 
-# 4.
+
 # define SSS register and callback args and output
 lib_lisa_rcv.callback_SSS_S.restype = None  # with  C++ compiler be sure it is declared as extern "C"
 lib_lisa_rcv.callback_SSS_S.argtypes = [ctypes.c_int,

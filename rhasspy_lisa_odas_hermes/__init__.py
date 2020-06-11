@@ -8,6 +8,7 @@ import typing
 import wave
 from queue import Queue, Full
 import webrtcvad
+import os.path
 
 # Import for odas
 import numpy as np
@@ -33,10 +34,20 @@ from rhasspyhermes.audioserver import (
 from rhasspyhermes.base import Message
 from rhasspyhermes.client import GeneratorType, HermesClient
 
+
 from lisa.lisa_switcher_bindings import SSL_struct, SSL_src_struct, SST_struct, SST_src_struct
 from lisa.lisa_switcher_bindings import callback_SSL_func, callback_SST_func, callback_SSS_S_func, lib_lisa_rcv
-from lisa.lisa_configuration import SST_TAG_LEN, MAX_ODAS_SOURCES, N_BITS_INCOME_STREAM, CHUNK_SIZE_INCOME_STREAM, \
-    SAMPLE_RATE_INCOME_STREAM, BYTES_PER_SAMPLE_INCOME_STREAM
+# from lisa.lisa_configuration import MAX_ODAS_SOURCES, N_BITS_INCOME_STREAM, CHUNK_SIZE_INCOME_STREAM, \
+#     SAMPLE_RATE_INCOME_STREAM, BYTES_PER_SAMPLE_INCOME_STREAM
+from lisa.lisa_configuration import config
+
+MAX_ODAS_SOURCES = int(config['INCOME_STREAM']['n_sources'])
+N_BITS_INCOME_STREAM = int(config['INCOME_STREAM']['n_bits'])
+CHUNK_SIZE_INCOME_STREAM = int(config['INCOME_STREAM']['chunk_size'])
+SAMPLE_RATE_INCOME_STREAM = int(config['INCOME_STREAM']['sample_rate'])
+ODAS_EXE = config['ODAS']['odas_exe']
+DEFAULT_ODAS_CONFIG = config['ODAS']['odas_config']
+BYTES_PER_SAMPLE_INCOME_STREAM = N_BITS_INCOME_STREAM // 8
 
 _LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
 
@@ -65,7 +76,6 @@ SSS_queue = None # Decided at runtime
 ##########################
 ## callback definitions ##
 ##########################
-
 @callback_SSL_func
 def callback_SSL(pSSL_struct):
     ssl_str = pSSL_struct[0]
@@ -163,17 +173,6 @@ def callback_SSS_S(n_bytes, x):
             pass
 
 
-def thread_start_odas_switcher():
-    def _delayed_odas_client():
-        sleep(SLEEP_BEFORE_START_CLIENT)
-        p = Popen(['lisa-odas/bin/odaslive', '-c', 'lisa-odas/config/matrix-lisa/matrix_voice_LISA_1.cfg'])
-
-    threading.Thread(target=_delayed_odas_client, daemon=True).start()
-    retval = lib_lisa_rcv.main_loop()
-    # TODO: some time the odas subsystem crash, should be re-spawned here
-    print("Exit thread odas loop with {}".format(retval))
-
-
 # A shared counter for higher id policy
 class _HigherID(object):
     def __init__(self, value=0):
@@ -197,11 +196,9 @@ class _HigherID(object):
             self.val.value = value
 
 
-
 ###################
 ## Hermes Client ##
 ###################
-
 class LisaHermesMqtt(HermesClient):
     """Hermes MQTT server for Rhasspy Lisa ODAS input using external lib."""
 
@@ -218,10 +215,11 @@ class LisaHermesMqtt(HermesClient):
         udp_audio_host: str = "127.0.0.1",
         udp_audio_port: typing.Optional[int] = None,
         vad_mode: int = DEFAULT_VAD_AGGRESSIVENESS,
-        demux: bool = False
+        demux: bool = False,
+        odas_config: str = DEFAULT_ODAS_CONFIG
     ):
-        print("Calling super with sample_rate={}, sample_width={} channels={} ".format(sample_rate, sample_width, channels))
-        assert 0 < channels <= MAX_ODAS_SOURCES, "Invalid number of channels {}, max is {}".format(channels, MAX_ODAS_SOURCES)
+        assert 0 < channels <= MAX_ODAS_SOURCES, "Invalid number of channels {}, max is {}".format(channels,
+                                                                                                   MAX_ODAS_SOURCES)
         super().__init__(
             "rhasspy-lisa-odas-hermes",
             client,
@@ -250,6 +248,7 @@ class LisaHermesMqtt(HermesClient):
         self.frames_per_buffer = chunk_size // sample_width
         self.output_site_id = output_site_id or self.site_id
         self.demux = demux
+        self.odas_config = odas_config
 
         self.udp_audio_host = udp_audio_host
         self.udp_audio_port = udp_audio_port
@@ -275,14 +274,31 @@ class LisaHermesMqtt(HermesClient):
         lib_lisa_rcv.register_callback_SSS_S(callback_SSS_S)
 
         # Start threads
+        self._exit_requested = False  # A flag to check if an exit is necessary
         if self.udp_audio_port is not None:
             self.udp_output = True
             self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             _LOGGER.debug("Audio will also be sent to UDP %s:%s", self.udp_audio_host, self.udp_audio_port,)
             self.subscribe(AsrStartListening, AsrStopListening)
-        threading.Thread(target=thread_start_odas_switcher, daemon=True).start()
+        threading.Thread(target=self._thread_start_odas_switcher,  daemon=True).start()
         threading.Thread(target=self.publish_chunks, daemon=True).start()
         threading.Thread(target=self.record, daemon=True).start()
+
+    @property
+    def exit_request(self):
+        _LOGGER.debug("Exit requested")
+        self._exit_requested = True
+
+    def _thread_start_odas_switcher(self):
+        def _delayed_odas_client():
+            sleep(SLEEP_BEFORE_START_CLIENT)
+            p = Popen([ODAS_EXE, '-c', self.odas_config])
+
+        while not self._exit_requested:
+            threading.Thread(target=_delayed_odas_client, daemon=True).start()
+            retval = lib_lisa_rcv.main_loop()
+            # TODO: some time the odas subsystem crash, should be re-spawned here
+            print("Exit thread odas loop with {}".format(retval))
 
     # -------------------------------------------------------------------------
     def record(self):
@@ -317,11 +333,11 @@ class LisaHermesMqtt(HermesClient):
             else:
                 return False
 
-        # Only for demux operations
+        # Only for demux operations, every thread listen to one channel
         def _source_listening(source_id, higher_id):
             _LOGGER.debug("Recording audio {}".format(source_id))
             try:
-                while True:
+                while not self._exit_requested:
                     audio_chunk = SSS_queue[source_id].get().tobytes()
                     self.raw_queue.task_done()  # sign the last job as done
                     position = _get_postion_message(source_id)  # metadata with position. to add a subscriber
@@ -345,7 +361,6 @@ class LisaHermesMqtt(HermesClient):
         try:
             # Start Thread
             listener_threads = []
-
             try:
                 # I need to retrieve ALL available channels and simply discard (this looks not very efficient though)
                 if self.demux:
@@ -353,14 +368,14 @@ class LisaHermesMqtt(HermesClient):
                         listener_threads.append(threading.Thread(target=_source_listening, args=(_n,_HIGHER_ID,), daemon=True))
                         listener_threads[-1].start()
                         # listener_threads.append(_th)
-                    while True:
+                    while not self._exit_requested:
                         sleep(0.5)
                         # TODO: should I  do some check for exit?
                 else:
                     loop = 0
                     assert N_BITS_INCOME_STREAM == 16, \
                         "Unsupported format, only 16 bits are accepted (this condition should be removed in future with a local cast)"
-                    while True:
+                    while not self._exit_requested:
                         loop += 1
                         audio_chunk = SSS_queue.get()
                         # prints are for debug
@@ -399,7 +414,7 @@ class LisaHermesMqtt(HermesClient):
         try:
             udp_dest = (self.udp_audio_host, self.udp_audio_port)
 
-            while True:
+            while not self._exit_requested:
                 chunk = self.chunk_queue.get()
                 if chunk:
                     # MQTT output

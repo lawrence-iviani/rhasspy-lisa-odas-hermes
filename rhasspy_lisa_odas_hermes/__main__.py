@@ -6,16 +6,21 @@ import sys
 
 import paho.mqtt.client as mqtt
 import rhasspyhermes.cli as hermes_cli
-from lisa.lisa_configuration import MAX_ODAS_SOURCES, BYTES_PER_SAMPLE_INCOME_STREAM, CHUNK_SIZE_INCOME_STREAM, \
-    SAMPLE_RATE_INCOME_STREAM
-
+from lisa.lisa_configuration import config
 from . import LisaHermesMqtt
 
 _LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
-
+AUDIO_UDP_PORT = 12813
 
 def main():
     """Main method."""
+
+    # MAX_ODAS_SOURCES = int(config['INCOME_STREAM']['n_sources'])
+    # CHUNK_SIZE_INCOME_STREAM = int(config['INCOME_STREAM']['chunk_size'])
+    SAMPLE_RATE_INCOME_STREAM = int(config['INCOME_STREAM']['sample_rate'])
+    BYTES_PER_SAMPLE_INCOME_STREAM = int(config['INCOME_STREAM']['n_bits']) // 8
+    ODAS_CONFIG = (config['ODAS']['odas_config'])
+
     parser = argparse.ArgumentParser(prog="rhasspy-lisa-odas-hermes")
     parser.add_argument(
         "--sample-rate",
@@ -51,8 +56,14 @@ def main():
     )
     parser.add_argument(
         "--udp-audio-port",
+        default=AUDIO_UDP_PORT,
         type=int,
-        help="Send raw audio to UDP port outside ASR listening",
+        help="Send raw audio to UDP port outside ASR listening, default port is " + str(AUDIO_UDP_PORT),
+    )
+    parser.add_argument(
+        "--odas-config",
+        default=ODAS_CONFIG,
+        help="ODAS configuration, default is: " + str(ODAS_CONFIG),
     )
 
     hermes_cli.add_hermes_args(parser)
@@ -66,7 +77,6 @@ def main():
         print("--sample-rate, --sample-width, and --channels are required")
         _LOGGER.fatal("--sample-rate, --sample-width, and --channels are required")
         sys.exit(-1)
-    print(args.channels, args.demux)
     if args.demux and args.channels > 1:
         print("In demux mode mode only one channel is streamed, channels arguments ignored")
         _LOGGER.warning("In demux mode mode only one channel is streamed, channels arguments is ignored")
@@ -76,13 +86,14 @@ def main():
     client = mqtt.Client()
     hermes = LisaHermesMqtt(
         client,
-        args.sample_rate,
-        args.sample_width,
-        args.channels,
+        sample_rate=args.sample_rate,
+        sample_width=args.sample_width,
+        channels=args.channels,
         site_ids=args.site_id,
         output_site_id=args.output_site_id,
         udp_audio_host=args.udp_audio_host,
         udp_audio_port=args.udp_audio_port,
+        odas_config=args.odas_config
     )
 
     _LOGGER.debug("Connecting to %s:%s", args.host, args.port)
@@ -94,7 +105,8 @@ def main():
         print("Ctrl-C to exit")
         asyncio.run(hermes.handle_messages_async())
     except KeyboardInterrupt:
-        pass
+        client.exit_request = True
+        print('Ctrl-C detected')
     finally:
         _LOGGER.debug("Shutting down")
         client.loop_stop()
