@@ -1,5 +1,8 @@
 from configparser import ConfigParser
 
+# TODO: most of these fields are duplicated from odas config and must be the same here. So it would make sense to
+# parse the odas config file
+
 # Default values if ini file is not found
 MAX_ODAS_SOURCES = 4
 SST_TAG_LEN = 20  # as in common.h
@@ -11,15 +14,16 @@ ODAS_RCV_LIB = '../lisa-odas/lib/liblisarcv'  # the location of liblisarcv.so, w
 ODAS_CONFIG = 'lisa-odas/config/matrix-lisa/matrix_voice_LISA_1.cfg'
 ODAS_EXE = 'lisa-odas/bin/odaslive'
 CONFIG_FILE = 'config_file/lisa.cfg'
-# BYTES_PER_SAMPLE_INCOME_STREAM = N_BITS_INCOME_STREAM // 8
 
 
-def get_configuration(file_name):
+def get_configuration(file_name, save_default=True):
     try:
         config = load_configuration(file_name)
     except FileNotFoundError as e:
         print('Config file not found, using default configuration')
         config = get_default_configuration()
+        if save_default:
+            save_configuration(file_name, config)
     print(config)
     return config
 
@@ -51,4 +55,3 @@ def load_configuration(file_name):
 
 # load the configuration as defined in config file
 config = get_configuration(CONFIG_FILE)
-save_configuration(CONFIG_FILE, config)

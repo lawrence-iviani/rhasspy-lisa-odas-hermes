@@ -220,6 +220,7 @@ class LisaHermesMqtt(HermesClient):
     ):
         assert 0 < channels <= MAX_ODAS_SOURCES, "Invalid number of channels {}, max is {}".format(channels,
                                                                                                    MAX_ODAS_SOURCES)
+        print(udp_audio_port)
         super().__init__(
             "rhasspy-lisa-odas-hermes",
             client,

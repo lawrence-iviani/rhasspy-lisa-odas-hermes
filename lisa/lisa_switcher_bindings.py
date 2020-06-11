@@ -2,7 +2,6 @@ import numpy as np
 import numpy.ctypeslib as npct
 import ctypes
 import os.path
-import sys
 
 from lisa.lisa_configuration import config
 
@@ -13,9 +12,7 @@ ODAS_RCV_LIB = config['ODAS']['library']
 
 pTag = ctypes.create_string_buffer(SST_TAG_LEN)
 
-if os.path.exists(ODAS_RCV_LIB):
-    print('{} doesnt exist (actual folder is {})'.format(ODAS_RCV_LIB , os.path.dirname(os.path.realpath(__file__))))
-    sys.exit(-100)
+
 print("Open file RCV lib {} - {}".format(ODAS_RCV_LIB, os.path.dirname(__file__)))
 lib_lisa_rcv = npct.load_library(ODAS_RCV_LIB, os.path.dirname(__file__))
 lib_lisa_rcv.main_loop.restype = ctypes.c_int

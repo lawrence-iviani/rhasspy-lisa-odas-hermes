@@ -10,7 +10,7 @@ from lisa.lisa_configuration import config
 from . import LisaHermesMqtt
 
 _LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
-AUDIO_UDP_PORT = 12813
+
 
 def main():
     """Main method."""
@@ -44,7 +44,8 @@ def main():
         "--demux",
         action='store_const', const=True,
         default=False,  # or MAX_ODAS_SOURCES,
-        help="Stream always one channel out by selecting the one with priority (priority mode TODO). If channels is provided is then discarded"
+        help="Stream always one channel out by selecting the one with higher priority (priority mode latest source). "
+             "If channels is provided is then discarded and only one streamed"
     )
     parser.add_argument(
         "--output-site-id", help="If set, output audio data to a different site id"
@@ -56,9 +57,8 @@ def main():
     )
     parser.add_argument(
         "--udp-audio-port",
-        default=AUDIO_UDP_PORT,
         type=int,
-        help="Send raw audio to UDP port outside ASR listening, default port is " + str(AUDIO_UDP_PORT),
+        help="Send raw audio to UDP port outside ASR listening",
     )
     parser.add_argument(
         "--odas-config",
@@ -68,7 +68,7 @@ def main():
 
     hermes_cli.add_hermes_args(parser)
     args = parser.parse_args()
-
+    print(args.udp_audio_port.__class__)
     hermes_cli.setup_logging(args)
     _LOGGER.debug(args)
 
@@ -96,6 +96,7 @@ def main():
         odas_config=args.odas_config
     )
 
+    print("Connecting to %s:%s", args.host, args.port)
     _LOGGER.debug("Connecting to %s:%s", args.host, args.port)
     hermes_cli.connect(client, args)
     client.loop_start()
