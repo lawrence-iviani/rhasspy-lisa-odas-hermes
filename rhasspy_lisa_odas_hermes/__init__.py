@@ -57,7 +57,7 @@ DEFAULT_VAD_AGGRESSIVENESS = 3
 
 # to be parametrized
 MEDIAN_WEIGHTS = [1/4, 1/2, 1/4]  # Set to none to skip, apply a median filter
-ACTIVITY_THRESHOLD = 0.1  # the min threshold for a source to being considered as active (override a bit odas behavior)
+ACTIVITY_THRESHOLD = 0.001  # the min threshold for a source to being considered as active (override a bit odas behavior)
 
 # Params for collecting queue from ODAS callbacks
 MAX_QUEUE_SIZE = 10
@@ -70,7 +70,10 @@ SSL_queue = [deque(maxlen=len(MEDIAN_WEIGHTS)) for _q in range(MAX_ODAS_SOURCES)
 SST_queue = [deque(maxlen=len(MEDIAN_WEIGHTS)) for _q in range(MAX_ODAS_SOURCES)]
 SSL_latest = [None for _q in range(MAX_ODAS_SOURCES)]
 SST_latest = [None for _q in range(MAX_ODAS_SOURCES)]
-SSS_queue = None # Decided at runtime
+SSS_queue = None  # Decided at runtime
+
+# other options
+DEBUG_LOCALIZATION = False
 
 
 ##########################
@@ -220,7 +223,11 @@ class LisaHermesMqtt(HermesClient):
     ):
         assert 0 < channels <= MAX_ODAS_SOURCES, "Invalid number of channels {}, max is {}".format(channels,
                                                                                                    MAX_ODAS_SOURCES)
-        print(udp_audio_port)
+        if demux:
+            assert channels == 1, 'In multiplex mode only one channel is steamed, received channels=' + str(channels)
+            self.channels = 1
+        else:
+            self.channels = channels
         super().__init__(
             "rhasspy-lisa-odas-hermes",
             client,
@@ -239,11 +246,7 @@ class LisaHermesMqtt(HermesClient):
 
         self.sample_rate = sample_rate  # incoming stream
         self.sample_width = sample_width # ODAS
-        if demux:
-            assert channels == 1, 'In multiplex mode only one channel is steamed, received channels=' + str(channels)
-            self.channels = 1
-        else:
-            self.channels = channels
+
         self.device_index = device_index
         self.chunk_size = chunk_size
         self.frames_per_buffer = chunk_size // sample_width
@@ -285,10 +288,15 @@ class LisaHermesMqtt(HermesClient):
         threading.Thread(target=self.publish_chunks, daemon=True).start()
         threading.Thread(target=self.record, daemon=True).start()
 
+    # HERE something is wrong...
     @property
     def exit_request(self):
         _LOGGER.debug("Exit requested")
-        self._exit_requested = True
+        return self._exit_requested
+
+    @exit_request.setter
+    def exit_request(self, value):
+        self._exit_requested = value
 
     def _thread_start_odas_switcher(self):
         def _delayed_odas_client():
@@ -306,27 +314,34 @@ class LisaHermesMqtt(HermesClient):
         """Record audio from ODAS receiver."""
         _HIGHER_ID = _HigherID()
 
-        def _get_postion_message(source_id):
-            return {"SST": SST_latest[source_id], "SSL": SSL_latest[source_id]}
+        def _get_postion_message(source_id=None):
+            if source_id is None:
+                return {"SST": SST_latest, "SSL": SSL_latest}
+            else:
+                return {"SST": SST_latest[source_id], "SSL": SSL_latest[source_id]}
 
         def _print_localization(n, position, audio_chunk):
-            if position['SST'] is not None and (
-                    len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD):
-                # print(position['SST'][1].tag)
-                # print("[{}]-SST_latest_".format(position['SST'][0], _n,))
-                #  position['SST'][1].tag,
-                #  position['SST'][1].activity))
-
-                print("[{}]-SST_latest_{}-id_{}: {} {}".format(position['SST'][0], n,
-                                                               position['SST'][1].id,
-                                                               position['SST'][1].tag,
-                                                               position['SST'][1].activity))
-                # print(str(audio_chunk) + '\n---------------------')
+            PRINT_AUDIO_CHUNK = True
+            def _print(n_id, pos, aud_cnk = None):
+                print("[{}]-SST_latest_{}-id_{}: {} {} - Audio Chunk len={}".format(pos[0], n_id,
+                                                               pos[1].id,
+                                                               pos[1].tag,
+                                                               pos[1].activity, len(aud_cnk)))
+                if PRINT_AUDIO_CHUNK:
+                    print('{}...{}\n---------------------'.format(aud_cnk[:30], aud_cnk[-10:]))
+            if isinstance(position, tuple):
+                p = position
+            elif position['SST'] is not None:
+                p = position['SST']
+            if len(p[1].tag) or p[1].activity > ACTIVITY_THRESHOLD:
+                _print(n, p, audio_chunk)
 
         def _acquire_streaming_id(position, higher_id):
-            if position['SST'] is not None and (len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD):
-                if position['SST'][1].id >= higher_id.value:
-                    higher_id.set_value(position['SST'][1].id )
+            # determine the stream with the higher id (latest)
+            # todo: here could stay the speaker identification process? How?
+            if position['SST'] is not None and _is_source_active(position['SST']): # position['SST'] is not None and (len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD):
+                if position['SST'][1].id >= _HIGHER_ID.value:
+                    _HIGHER_ID.set_value(position['SST'][1].id )
                     # print(position['SST'][1].id , higher_id.value)
                     return True
                 else:
@@ -334,23 +349,32 @@ class LisaHermesMqtt(HermesClient):
             else:
                 return False
 
+        def _is_source_active(sst_pos):
+            if sst_pos is None:
+                return False
+            return len(sst_pos[1].tag) or sst_pos[1].activity > ACTIVITY_THRESHOLD
+
+
         # Only for demux operations, every thread listen to one channel
         def _source_listening(source_id, higher_id):
             _LOGGER.debug("Recording audio {}".format(source_id))
             try:
                 while not self._exit_requested:
                     audio_chunk = SSS_queue[source_id].get().tobytes()
-                    self.raw_queue.task_done()  # sign the last job as done
+                    SSS_queue[source_id].task_done()  # sign the last job as done
                     position = _get_postion_message(source_id)  # metadata with position. to add a subscriber
                     if audio_chunk is None:
                         raise Exception("Received buffer none for source_id_{}".format(
                             source_id))  # stop processing if the main thread is done. this means data are not anymore a
-                    if _acquire_streaming_id(position, higher_id):  # source_id >= higher_id.value():
-                        self.chunk_queue.put(audio_chunk)  # + position?
-                        _print_localization(str(source_id) + '_Acquired Priority', position, audio_chunk)
+                    if _acquire_streaming_id(position, _HIGHER_ID):  # source_id >= higher_id.value():
+                        if _is_source_active(position['SST']):
+                                # len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD:
+                            self.chunk_queue.put(audio_chunk)
+                            # _print_localization(str(source_id) + '_Acquired Priority', position, audio_chunk)
                     else:
-                        _print_localization(str(source_id) + '_Discarded(Higher is ' + str(higher_id.value) +
-                                            ')', position, audio_chunk)
+                        if DEBUG_LOCALIZATION:
+                            _print_localization(str(source_id) + '_Discarded(Higher is ' + str(higher_id.value) +
+                                                ')', position, audio_chunk)
             except Exception as e:
                 print("_source_listening(" + str(source_id) + "), exception: " + str(e))
             finally:
@@ -369,9 +393,20 @@ class LisaHermesMqtt(HermesClient):
                         listener_threads.append(threading.Thread(target=_source_listening, args=(_n,_HIGHER_ID,), daemon=True))
                         listener_threads[-1].start()
                         # listener_threads.append(_th)
+
                     while not self._exit_requested:
-                        sleep(0.5)
-                        # TODO: should I  do some check for exit?
+                        sleep(0.05)
+                        # check and in case reset the max id (e.g. a higher id source terminated)
+                        _max_ID = -1
+                        positions = _get_postion_message()
+                        for _n in range(MAX_ODAS_SOURCES):
+                            if _is_source_active(positions['SST'][_n]):
+                                _max_ID = max(positions['SST'][_n][1].id, _max_ID)
+                        if _HIGHER_ID.value > _max_ID:
+                            # reset the max id with the actual higher value
+                            if DEBUG_LOCALIZATION:
+                                print("Reset max id from {} to {}".format(_HIGHER_ID.value, _max_ID))
+                            _HIGHER_ID.set_value(_max_ID)
                 else:
                     loop = 0
                     assert N_BITS_INCOME_STREAM == 16, \
@@ -379,14 +414,18 @@ class LisaHermesMqtt(HermesClient):
                     while not self._exit_requested:
                         loop += 1
                         audio_chunk = SSS_queue.get()
-                        # prints are for debug
-                        # print("audio_chunk_shape=" + str(audio_chunk.shape) + "\n" +str(audio_chunk)[:100] )
                         out_chunk = np.zeros(shape=(audio_chunk.shape[0], self.channels), dtype=np.int16)
+                        positions = _get_postion_message()  # metadata with position. to add a subscriber
                         for _n in range(MAX_ODAS_SOURCES):
                             if _n < self.channels:
-                                out_chunk[:, _n] = audio_chunk[:, _n]
-                        # print("out_chunk_shape=" + str(out_chunk.shape) + "\n" + str(out_chunk)[:100] +
-                        # "\n--------------------------------------------------------\n")
+                                # the channel is added only if the activity threshold is above a certain level
+                                if _is_source_active(positions['SST'][_n]): #   len(positions['SST'][_n][1].tag) or positions['SST'][_n][1].activity > ACTIVITY_THRESHOLD:
+                                    out_chunk[:, _n] = audio_chunk[:, _n]
+                                    if DEBUG_LOCALIZATION:
+                                        _print_localization('CH_' + str(_n), positions['SST'][_n], out_chunk[:, _n])
+                                else:
+                                    if DEBUG_LOCALIZATION:
+                                        print("CH_" + str(_n) + " Discarded, activity=" + str(positions['SST'][_n][1].activity))
                         self.chunk_queue.put(out_chunk.tobytes())
 
             except Exception as e:

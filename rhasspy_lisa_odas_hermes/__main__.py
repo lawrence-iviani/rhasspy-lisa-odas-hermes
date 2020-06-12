@@ -68,7 +68,6 @@ def main():
 
     hermes_cli.add_hermes_args(parser)
     args = parser.parse_args()
-    print(args.udp_audio_port.__class__)
     hermes_cli.setup_logging(args)
     _LOGGER.debug(args)
 
@@ -79,8 +78,8 @@ def main():
         sys.exit(-1)
     if args.demux and args.channels > 1:
         print("In demux mode mode only one channel is streamed, channels arguments ignored")
-        _LOGGER.warning("In demux mode mode only one channel is streamed, channels arguments is ignored")
-        args.channels = 1
+        _LOGGER.fatal("In demux mode mode only one channel is streamed, channels arguments is ignored")
+        sys.exit(-2)
 
     # Listen for messages
     client = mqtt.Client()
@@ -93,11 +92,11 @@ def main():
         output_site_id=args.output_site_id,
         udp_audio_host=args.udp_audio_host,
         udp_audio_port=args.udp_audio_port,
-        odas_config=args.odas_config
+        odas_config=args.odas_config,
+        demux=args.demux,
     )
 
-    print("Connecting to %s:%s", args.host, args.port)
-    _LOGGER.debug("Connecting to %s:%s", args.host, args.port)
+    _LOGGER.info("Connecting to %s:%s", args.host, args.port)
     hermes_cli.connect(client, args)
     client.loop_start()
 
