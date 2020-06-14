@@ -17,13 +17,15 @@ sudo apt install libjson-c-dev
 
 ## Installing ODAS
 
-Clone the Lisa-ODAS project:
+~~Clone the Lisa-ODAS project:~~
 
+** NOT ANYMORE REQUIRED **
+this is the previous fork
 ```batch
 git clone https://github.com/lawrence-iviani/lisa-odas.git
 ```
 
-Create a folder to build the project and build it:
+Localize the folder lisa-odas and create a folder to build the project and build it:
 
 ```batch
 cd lisa-odas
