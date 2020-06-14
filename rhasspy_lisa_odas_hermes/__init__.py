@@ -37,8 +37,6 @@ from rhasspyhermes.client import GeneratorType, HermesClient
 
 from lisa.lisa_switcher_bindings import SSL_struct, SSL_src_struct, SST_struct, SST_src_struct
 from lisa.lisa_switcher_bindings import callback_SSL_func, callback_SST_func, callback_SSS_S_func, lib_lisa_rcv
-# from lisa.lisa_configuration import MAX_ODAS_SOURCES, N_BITS_INCOME_STREAM, CHUNK_SIZE_INCOME_STREAM, \
-#     SAMPLE_RATE_INCOME_STREAM, BYTES_PER_SAMPLE_INCOME_STREAM
 from lisa.lisa_configuration import config
 
 MAX_ODAS_SOURCES = int(config['INCOME_STREAM']['n_sources'])
@@ -55,13 +53,16 @@ _LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
 # an integer between 0 and 3, 0 being the least aggressive about filtering out non-speech, 3 the most aggressive.
 DEFAULT_VAD_AGGRESSIVENESS = 3
 
-# to be parametrized
+# TODO: to be parametrized
 MEDIAN_WEIGHTS = [1/4, 1/2, 1/4]  # Set to none to skip, apply a median filter
-ACTIVITY_THRESHOLD = 0.001  # the min threshold for a source to being considered as active (override a bit odas behavior)
+# BETWEEN 0..1 a little bit magic number actually
+ACTIVITY_THRESHOLD = 0.01 #  the min threshold for a source to being considered as tracked active (override a bit odas behavior)
+ENERGY_THRESHOLD = 0.3  # The energy to be considered a potential localized source
+REFRESH_RATE = 10 # 20  # in hertz 10Hz -> 100ms, 20Hz -> 50ms, ... interval btw messages
 
 # Params for collecting queue from ODAS callbacks
 MAX_QUEUE_SIZE = 10
-SLEEP_BEFORE_START_CLIENT = 0.5 # sec sync between odas tx/rx. The rx (server) is spawned first and then the tx
+SLEEP_BEFORE_START_CLIENT = 0.5  # sec sync between odas tx/rx. The rx (server) is spawned first and then the tx
 # TODO: change the MULTI_THREAD in something like DEMULTIPLEXER . THis means one source is selected (e.g latest it)
 # and streamed, reagardless the number of channel
 # MULTI_THREAD = False  # TODO: This influence also how the raw data  streaming are collected
@@ -287,6 +288,7 @@ class LisaHermesMqtt(HermesClient):
         threading.Thread(target=self._thread_start_odas_switcher,  daemon=True).start()
         threading.Thread(target=self.publish_chunks, daemon=True).start()
         threading.Thread(target=self.record, daemon=True).start()
+        threading.Thread(target=self.publish_odas, daemon=True).start()
 
     # HERE something is wrong...
     @property
@@ -301,15 +303,39 @@ class LisaHermesMqtt(HermesClient):
     def _thread_start_odas_switcher(self):
         def _delayed_odas_client():
             sleep(SLEEP_BEFORE_START_CLIENT)
-            p = Popen([ODAS_EXE, '-c', self.odas_config])
+            cmd = [ODAS_EXE, '-c', self.odas_config]
+            p = Popen(cmd)
+            print(str(cmd) + " exit, " + str(p))
 
         while not self._exit_requested:
             threading.Thread(target=_delayed_odas_client, daemon=True).start()
+            print("Start odas main loop")
             retval = lib_lisa_rcv.main_loop()
             # TODO: some time the odas subsystem crash, should be re-spawned here
+            # note: crashed, but didnt exit. So probably is necessary a watch dog for p if exit?
+            if not self._exit_requested:
+                print('TODO: this should not happen. Furthermore the thread is relaunched but with no effect.. Sleep? sync problem? who dies?')
             print("Exit thread odas loop with {}".format(retval))
 
     # -------------------------------------------------------------------------
+    def _is_source_localized(self, ssl_src):
+        """
+        :param ssl_src: a lisa.lisa_switcher_bindings.SSL_src_struct
+        :return: True if Energy > ENERGY_THRESHOLD
+        """
+        if ssl_src is None:
+            return False
+        return ssl_src[1].E > ENERGY_THRESHOLD
+
+    def _is_source_tracked(self, sst_src):
+        """
+        :param sst_src: a lisa.lisa_switcher_bindings.SST_src_struct
+        :return: True if tag is dynamic (should be removed?) and activity > ACTIVITY_THRESHOLD
+        """
+        if sst_src is None:
+            return False
+        return len(sst_src[1].tag) or sst_src[1].activity > ACTIVITY_THRESHOLD
+
     def record(self):
         """Record audio from ODAS receiver."""
         _HIGHER_ID = _HigherID()
@@ -321,6 +347,7 @@ class LisaHermesMqtt(HermesClient):
                 return {"SST": SST_latest[source_id], "SSL": SSL_latest[source_id]}
 
         def _print_localization(n, position, audio_chunk):
+            """Debug only purpose"""
             PRINT_AUDIO_CHUNK = True
             def _print(n_id, pos, aud_cnk = None):
                 print("[{}]-SST_latest_{}-id_{}: {} {} - Audio Chunk len={}".format(pos[0], n_id,
@@ -337,9 +364,9 @@ class LisaHermesMqtt(HermesClient):
                 _print(n, p, audio_chunk)
 
         def _acquire_streaming_id(position, higher_id):
-            # determine the stream with the higher id (latest)
-            # todo: here could stay the speaker identification process? How?
-            if position['SST'] is not None and _is_source_active(position['SST']): # position['SST'] is not None and (len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD):
+            """Determine the stream with the higher id (latest)
+                TODO: here could stay the speaker identification process? How?"""
+            if position['SST'] is not None and self._is_source_tracked(position['SST']): # position['SST'] is not None and (len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD):
                 if position['SST'][1].id >= _HIGHER_ID.value:
                     _HIGHER_ID.set_value(position['SST'][1].id )
                     # print(position['SST'][1].id , higher_id.value)
@@ -349,14 +376,9 @@ class LisaHermesMqtt(HermesClient):
             else:
                 return False
 
-        def _is_source_active(sst_pos):
-            if sst_pos is None:
-                return False
-            return len(sst_pos[1].tag) or sst_pos[1].activity > ACTIVITY_THRESHOLD
-
-
-        # Only for demux operations, every thread listen to one channel
         def _source_listening(source_id, higher_id):
+            """Only for demux operations, used as a thread listen to one channel and the source with a certain policy
+            is """
             _LOGGER.debug("Recording audio {}".format(source_id))
             try:
                 while not self._exit_requested:
@@ -367,7 +389,7 @@ class LisaHermesMqtt(HermesClient):
                         raise Exception("Received buffer none for source_id_{}".format(
                             source_id))  # stop processing if the main thread is done. this means data are not anymore a
                     if _acquire_streaming_id(position, _HIGHER_ID):  # source_id >= higher_id.value():
-                        if _is_source_active(position['SST']):
+                        if self._is_source_tracked(position['SST']):
                                 # len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD:
                             self.chunk_queue.put(audio_chunk)
                             # _print_localization(str(source_id) + '_Acquired Priority', position, audio_chunk)
@@ -376,11 +398,10 @@ class LisaHermesMqtt(HermesClient):
                             _print_localization(str(source_id) + '_Discarded(Higher is ' + str(higher_id.value) +
                                                 ')', position, audio_chunk)
             except Exception as e:
-                print("_source_listening(" + str(source_id) + "), exception: " + str(e))
+                _LOGGER.warning("Got an error listening source {} -> {}".format(source_id, e))
             finally:
                 pass
             # TODO: Profiling?
-            print("+-+-+-+-+-+-+-+-+-+-+ Stop recording audio {}, exit thread".format(source_id))
             _LOGGER.debug("Stop recording audio {}, exit thread".format(source_id))
 
         try:
@@ -392,15 +413,13 @@ class LisaHermesMqtt(HermesClient):
                     for _n in range(MAX_ODAS_SOURCES):  # What about range(channels)? TODO: channels < MAX_ODAS_SOURCES in init
                         listener_threads.append(threading.Thread(target=_source_listening, args=(_n,_HIGHER_ID,), daemon=True))
                         listener_threads[-1].start()
-                        # listener_threads.append(_th)
-
                     while not self._exit_requested:
-                        sleep(0.05)
+                        sleep(1.0/REFRESH_RATE)  # Refresh rate
                         # check and in case reset the max id (e.g. a higher id source terminated)
                         _max_ID = -1
                         positions = _get_postion_message()
                         for _n in range(MAX_ODAS_SOURCES):
-                            if _is_source_active(positions['SST'][_n]):
+                            if self._is_source_tracked(positions['SST'][_n]):
                                 _max_ID = max(positions['SST'][_n][1].id, _max_ID)
                         if _HIGHER_ID.value > _max_ID:
                             # reset the max id with the actual higher value
@@ -413,13 +432,13 @@ class LisaHermesMqtt(HermesClient):
                         "Unsupported format, only 16 bits are accepted (this condition should be removed in future with a local cast)"
                     while not self._exit_requested:
                         loop += 1
-                        audio_chunk = SSS_queue.get()
+                        audio_chunk = SSS_queue.get()  # It will wait until data are available
                         out_chunk = np.zeros(shape=(audio_chunk.shape[0], self.channels), dtype=np.int16)
                         positions = _get_postion_message()  # metadata with position. to add a subscriber
                         for _n in range(MAX_ODAS_SOURCES):
                             if _n < self.channels:
                                 # the channel is added only if the activity threshold is above a certain level
-                                if _is_source_active(positions['SST'][_n]): #   len(positions['SST'][_n][1].tag) or positions['SST'][_n][1].activity > ACTIVITY_THRESHOLD:
+                                if self._is_source_tracked(positions['SST'][_n]): #   len(positions['SST'][_n][1].tag) or positions['SST'][_n][1].activity > ACTIVITY_THRESHOLD:
                                     out_chunk[:, _n] = audio_chunk[:, _n]
                                     if DEBUG_LOCALIZATION:
                                         _print_localization('CH_' + str(_n), positions['SST'][_n], out_chunk[:, _n])
@@ -429,8 +448,8 @@ class LisaHermesMqtt(HermesClient):
                         self.chunk_queue.put(out_chunk.tobytes())
 
             except Exception as e:
-                print("record, exception: " + str(e))
-                _LOGGER.debug("Recording got an exception: {}".format(e))
+                _LOGGER.warning("Got an error recording -> {}".format(e))
+                # print("record, exception: " + str(e))
             finally:
                 if self.demux:
                     for _n in range(MAX_ODAS_SOURCES):
@@ -446,6 +465,54 @@ class LisaHermesMqtt(HermesClient):
                     error=str(e),
                     context=f"Device index: {self.device_index}",
                     site_id=self.output_site_id,
+                )
+            )
+
+    def publish_odas(self):
+        """Publish the latest ."""
+
+        from lisa.rhasppy_messages import SSL_src_msg, SST_src_msg
+        try:
+            while not self._exit_requested:
+                for _n in range(MAX_ODAS_SOURCES):
+                    _ssl_latest = SSL_latest[_n]
+                    if self._is_source_localized(_ssl_latest):
+                        _ts = _ssl_latest[0]
+                        _ssl_latest = _ssl_latest[1]
+                        _publish = SSL_src_msg(timestamp=_ts,
+                                               channel=_n,
+                                               E=_ssl_latest.E,
+                                               x=_ssl_latest.x,
+                                               y=_ssl_latest.y,
+                                               z=_ssl_latest.z)
+                        self.publish(
+                            _publish,
+                            site_id=self.output_site_id,
+                        )
+                        # print('Published SSL', _publish.topic(), _publish)
+                    _sst_latest = SST_latest[_n]
+                    if self._is_source_tracked(_sst_latest):
+                        _ts = _sst_latest[0]
+                        _sst_latest = _sst_latest[1]
+                        _publish = SST_src_msg(timestamp=_ts,
+                                               channel=_n,
+                                               activity=_sst_latest.activity,
+                                               x=_sst_latest.x,
+                                               y=_sst_latest.y,
+                                               z=_sst_latest.z,
+                                               id=_sst_latest.id)
+                        self.publish(
+                            _publish,
+                            site_id=self.output_site_id,
+                        )
+                        # print('Published SST', _publish.topic(), _publish)
+                sleep(1.0/REFRESH_RATE)
+
+        except Exception as e:
+            _LOGGER.exception("publish_odas: " + str(e))
+            self.publish(
+                AudioRecordError(
+                    error=str(e), context="publish_chunks", site_id=self.site_id
                 )
             )
 
@@ -488,26 +555,35 @@ class LisaHermesMqtt(HermesClient):
                             # Create voice activity detector
                             self.vad = webrtcvad.Vad()
                             self.vad.set_mode(self.vad_mode)
-
+                        # webrtcvad needs 16-bit 16Khz mono
+                        # TODO: would be possible to split here if demux is not selected? this would avoid resampling,
+                        # which is called continuously. (uncomment this code). With the switch --demux a proper channel
+                        # is produced
+                        # with io.BytesIO(wav_bytes) as wav_io:
+                        #     with wave.open(wav_io, "rb") as wav_file:
+                        #         if (wav_file.getframerate() != 16000) or \
+                        #                 (wav_file.getsampwidth() != 2) or \
+                        #                 (wav_file.getnchannels() != 1):
+                        #             print("Need Resample: sr={}, width={}, n_ch={}".format(wav_file.getframerate(),
+                        #                                                                    wav_file.getsampwidth(),
+                        #                                                                    wav_file.getnchannels()))
+                        #         else:
+                        #             print("No resample")
                         # webrtcvad needs 16-bit 16Khz mono
                         self.vad_audio_data += self.maybe_convert_wav(
                             wav_bytes, sample_rate=16000, sample_width=2, channels=1
                         )
-
                         is_speech = False
-
                         # Process in chunks of 30ms for webrtcvad
                         while len(self.vad_audio_data) >= self.vad_chunk_size:
                             vad_chunk = self.vad_audio_data[: self.vad_chunk_size]
                             self.vad_audio_data = self.vad_audio_data[
                                 self.vad_chunk_size :
                             ]
-
                             # Speech in any chunk counts as speech
                             is_speech = is_speech or self.vad.is_speech(
                                 vad_chunk, 16000
                             )
-
                         # Publish audio summary
                         self.publish(
                             AudioSummary(
