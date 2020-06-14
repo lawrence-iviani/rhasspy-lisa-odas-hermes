@@ -1,31 +1,6 @@
 ODAS Lisa
 =======
 A receiver and decoder of odas signal which is able to feed a speech recognition (based on kaldi or deep speech) and an intent recognition to trigger specific actions (e.g sending a ROS event).
-It is one of the main implementation of my project and it contains some information about the embedded system as well.
-The idea is to run this as service (docker? RHASSPY [Voltron](https://github.com/rhasspy/rhasspy-voltron)) inside a RHASSPY environment.
-
-RHASSPY 
-=======
-Rhasspy (pronounced RAH-SPEE) is an open source, fully offline voice assistant toolkit for many languages that works well with Home Assistant, Hass.io, and Node-RED.
-
-https://rhasspy.readthedocs.io/en/latest/
-
-KALDI 
-=======
-[Kaldi](https://kaldi-asr.org/)
-Kaldi is a toolkit for speech recognition, intended for use by speech recognition researchers and professionals. Find the code repository on [git](http://github.com/kaldi-asr/kaldi)
-
-DEEPSPEECH
-=======
-[Git DeepSpeech](https://github.com/mozilla/DeepSpeech)
-
-DeepSpeech is an open source Speech-To-Text engine, using a model trained by machine learning techniques based on Baidu's Deep Speech research paper. Project DeepSpeech uses Google's TensorFlow to make the implementation easier.
-
-Documentation for installation, usage, and training models is available on [deepspeech.readthedocs.io](http://deepspeech.readthedocs.io/?badge=latest)
-
-# Paper
-
-https://arxiv.org/abs/1412.5567
 
 
 ODAS 
@@ -60,5 +35,5 @@ Wished:
 Ver.2
 Implementing a basic pipeline in a python revceiver. Able to use sphinx and google online
 
-Ver.3
-The actual, transformation in a Sensor with DOA and activity identification plus a Robot Automation based on Command Speech 
+Ver.3 
+Being integrated as a library of into a rhasspy module
