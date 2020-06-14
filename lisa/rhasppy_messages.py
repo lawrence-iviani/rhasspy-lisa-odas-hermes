@@ -1,5 +1,5 @@
 
-"""MQTT messages used within the """
+"""MQTT messages used within the Lisa Hermes Module"""
 from dataclasses import dataclass
 import typing
 
