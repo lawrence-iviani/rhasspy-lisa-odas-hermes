@@ -1,14 +1,51 @@
-# Rhasspy PyAudio Hermes MQTT Service
+# rhasspy-lisa-odas-hermes
+
+An input module of ODAS beamformed sources for Rhasspy  and a sensor with DOA capabilities and activity identification. In the direction of providing a more robust signal for  infering specific intents.
+
+This module is based on the rhasspy-pyaudio module and records audio from [ODAS](https://github.com/introlab/odas) and publishes WAV chunks according to the [Hermes protocol](https://docs.snips.ai/reference/hermes).
+Furthermore, specific messages for the DOA from ODAS of localized (potential) sources and tracked sources are produced.
+
+
+# RHASSPY 
+
+Rhasspy (pronounced RAH-SPEE) is an open source, fully offline voice assistant toolkit for many languages that works well with Home Assistant, Hass.io, and Node-RED.
+
+https://rhasspy.readthedocs.io/en/latest/
+
+# Speech Recognition
+
+Part of rhasspy. This part will be moved
+
+## KALDI 
+=======
+[Kaldi](https://kaldi-asr.org/)
+Kaldi is a toolkit for speech recognition, intended for use by speech recognition researchers and professionals. Find the code repository on [git](http://github.com/kaldi-asr/kaldi)
+
+## DEEPSPEECH
+
+[Git DeepSpeech](https://github.com/mozilla/DeepSpeech)
+
+DeepSpeech is an open source Speech-To-Text engine, using a model trained by machine learning techniques based on Baidu's Deep Speech research paper. Project DeepSpeech uses Google's TensorFlow to make the implementation easier.
+
+Documentation for installation, usage, and training models is available on [deepspeech.readthedocs.io](http://deepspeech.readthedocs.io/?badge=latest)
+
+### Paper
+
+https://arxiv.org/abs/1412.5567
+
+
+# Based onRhasspy PyAudio Hermes MQTT Service
+
+**As an example from the forked repos, CI not implemented yet**
 
 [![Continous Integration](https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes/workflows/Tests/badge.svg)](https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes/actions)
 [![GitHub license](https://img.shields.io/github/license/rhasspy/rhasspy-microphone-pyaudio-hermes.svg)](https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes/blob/master/LICENSE)
 
-Records audio from [PyAudio](https://people.csail.mit.edu/hubert/pyaudio/) and publishes WAV chunks according to the [Hermes protocol](https://docs.snips.ai/reference/hermes).
 
 ## Running With Docker
 
 ```bash
-$ docker run -it rhasspy/rhasspy-microphone-pyaudio-hermes:<VERSION> <ARGS>
+$ docker run -it rhasspy/rhasspy-lisa-odas-hermes:<VERSION> <ARGS>
 ```
 
 ## Building From Source
@@ -16,17 +53,19 @@ $ docker run -it rhasspy/rhasspy-microphone-pyaudio-hermes:<VERSION> <ARGS>
 Clone the repository and create the virtual environment:
 
 ```bash
-$ git clone https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes.git
-$ cd rhasspy-microphone-pyaudio-hermes
+$ git clone https://github.com/rhasspy/rhasspy-lisa-odas-hermes.git
+$ cd rhasspy-lisa-odas-hermes
 $ ./configure --enable-in-place
 $ make
 $ make install
 ```
 
-Run the `rhasspy-microphone-pyaudio-hermes` script to access the command-line interface:
+
+
+Run the `rhasspy-lisa-odas-hermes` script to access the command-line interface:
 
 ```bash
-$ ./rhasspy-microphone-pyaudio-hermes --help
+$ ./rhasspy-lisa-odas-hermes --help
 ```
 
 ## Building the Docker Image
@@ -39,14 +78,14 @@ $ DOCKER_REGISTRY=myregistry:12345 scripts/build-docker.sh
 
 Requires [Docker Buildx](https://docs.docker.com/buildx/working-with-buildx/). Set `PLATFORMS` environment to only build for specific platforms (e.g., `linux/amd64`).
 
-This will create a Docker image tagged `rhasspy/rhasspy-microphone-pyaudio-hermes:<VERSION>` where `VERSION` comes from the file of the same name in the source root directory.
+This will create a Docker image tagged `rhasspy/rhasspy-lisa-odas-hermes:<VERSION>` where `VERSION` comes from the file of the same name in the source root directory.
 
 NOTE: If you add things to the Docker image, make sure to whitelist them in `.dockerignore`.
 
 ## Command-Line Options
 
 ```
-usage: rhasspy-microphone-pyaudio-hermes [-h] [--list-devices]
+usage: rhasspy-lisa-odas-hermes [-h] [--list-devices]
                                          [--device-index DEVICE_INDEX]
                                          [--sample-rate SAMPLE_RATE]
                                          [--sample-width SAMPLE_WIDTH]
