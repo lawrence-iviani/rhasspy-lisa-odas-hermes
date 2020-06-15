@@ -1,6 +1,6 @@
 # rhasspy-lisa-odas-hermes
 
-An input module of ODAS beamformed sources for [Rhasspy](https://rhasspy.readthedocs.io/en/latest/#services)  and a sensor with DOA capabilities and activity identification. In the direction of providing a more robust signal to noise ration for  infering specific intents. 
+An input module of ODAS beamformed sources for [Rhasspy](https://rhasspy.readthedocs.io/en/latest/#services)  and a sensor with DOA capabilities and activity identification. In the direction of providing a more robust signal to noise ratio for infering specific intents with rhasspy. 
 
 This module is based on the rhasspy-pyaudio module and records audio from [ODAS](https://github.com/introlab/odas) and publishes WAV chunks according to the [Hermes protocol](https://docs.snips.ai/reference/hermes).
 Furthermore, specific messages for the DOA from ODAS of localized (potential) sources and tracked sources are produced.
@@ -12,7 +12,7 @@ See [lisa rhasppy messages](https://github.com/lawrence-iviani/rhasspy-lisa-odas
 
 See [lisa-ODAS-receiver](https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/tree/master/lisa-odas/demo/lisa-ODAS-receiver)
 
-**VERY IMPORTANT, in all cases at today the lisa-odas library must be build separately **
+**VERY IMPORTANT, in all cases at today the lisa-odas library must be build separately**
 
 Adjustment in the path could be necessary
 
