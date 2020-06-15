@@ -6,44 +6,14 @@ This module is based on the rhasspy-pyaudio module and records audio from [ODAS]
 Furthermore, specific messages for the DOA from ODAS of localized (potential) sources and tracked sources are produced.
 See https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/blob/master/lisa/rhasppy_messages.py
 
-# RHASSPY 
-
-Rhasspy (pronounced RAH-SPEE) is an open source, fully offline voice assistant toolkit for many languages that works well with Home Assistant, Hass.io, and Node-RED.
-
-https://rhasspy.readthedocs.io/en/latest/
-
-# Speech Recognition
-
-Part of rhasspy. This part will be moved
-
-## KALDI 
-
-[Kaldi](https://kaldi-asr.org/)
-Kaldi is a toolkit for speech recognition, intended for use by speech recognition researchers and professionals. Find the code repository on [git](http://github.com/kaldi-asr/kaldi)
-
-## DEEPSPEECH
-
-[Git DeepSpeech](https://github.com/mozilla/DeepSpeech)
-
-DeepSpeech is an open source Speech-To-Text engine, using a model trained by machine learning techniques based on Baidu's Deep Speech research paper. Project DeepSpeech uses Google's TensorFlow to make the implementation easier.
-
-Documentation for installation, usage, and training models is available on [deepspeech.readthedocs.io](http://deepspeech.readthedocs.io/?badge=latest)
-
-### Paper
-
-https://arxiv.org/abs/1412.5567
-
-
-# Based onRhasspy PyAudio Hermes MQTT Service
-
-**As an example from the forked repos, CI not implemented yet**
-
-[![Continous Integration](https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes/workflows/Tests/badge.svg)](https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes/actions)
-[![GitHub license](https://img.shields.io/github/license/rhasspy/rhasspy-microphone-pyaudio-hermes.svg)](https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes/blob/master/LICENSE)
+# Run the module
 
 ## Build ODAS
-See https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/tree/master/lisa-odas/demo/lisa-ODAS-receiver
-**VERY IMPORTANT, in all cases at today the lisa-odas library must be build separately**
+
+See [lisa-ODAS-receiver](https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/tree/master/lisa-odas/demo/lisa-ODAS-receiver)
+
+**VERY IMPORTANT, in all cases at today the lisa-odas library must be build separately **
+
 Adjustment in the path could be necessary
 
 ## Running With Docker
@@ -63,7 +33,6 @@ $ ./configure --enable-in-place
 $ make
 $ make install
 ```
-
 
 
 Run the `rhasspy-lisa-odas-hermes` script to access the command-line interface:
@@ -154,3 +123,41 @@ optional arguments:
                         Python logger format
 
 ```
+
+# SW References 
+
+## RHASSPY 
+
+Rhasspy (pronounced RAH-SPEE) is an open source, fully offline voice assistant toolkit for many languages that works well with Home Assistant, Hass.io, and Node-RED.
+
+https://rhasspy.readthedocs.io/en/latest/
+
+## Speech Recognition
+
+Part of rhasspy. This part will be moved
+
+### KALDI 
+
+[Kaldi](https://kaldi-asr.org/)
+Kaldi is a toolkit for speech recognition, intended for use by speech recognition researchers and professionals. Find the code repository on [git](http://github.com/kaldi-asr/kaldi)
+
+### DEEPSPEECH
+
+[Git DeepSpeech](https://github.com/mozilla/DeepSpeech)
+
+DeepSpeech is an open source Speech-To-Text engine, using a model trained by machine learning techniques based on Baidu's Deep Speech research paper. Project DeepSpeech uses Google's TensorFlow to make the implementation easier.
+
+Documentation for installation, usage, and training models is available on [deepspeech.readthedocs.io](http://deepspeech.readthedocs.io/?badge=latest)
+
+#### Paper
+
+https://arxiv.org/abs/1412.5567
+
+
+## Based onRhasspy PyAudio Hermes MQTT Service
+
+**As an example from the forked repos, CI not implemented yet**
+
+[![Continous Integration](https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes/workflows/Tests/badge.svg)](https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes/actions)
+[![GitHub license](https://img.shields.io/github/license/rhasspy/rhasspy-microphone-pyaudio-hermes.svg)](https://github.com/rhasspy/rhasspy-microphone-pyaudio-hermes/blob/master/LICENSE)
+
