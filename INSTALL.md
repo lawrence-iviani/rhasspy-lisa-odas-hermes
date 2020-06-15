@@ -1,7 +1,6 @@
 # EMBEDDED
 
 ## OS - Raspbian 
----------------
 
 Go in [Raspberry Pi OS (Former Raspbian) page](https://www.raspberrypi.org/downloads/raspberry-pi-os/)
 And download the latest Raspberry Pi OS (32-bit) Lite Minimal image based on Debian Buster
@@ -16,7 +15,7 @@ You need to start Pi Headless with **SSH**, place a file named “ssh” (withou
 [raspberry-pi-headless-install](https://hackernoon.com/raspberry-pi-headless-install-462ccabd75d0 )
 
 ## First Run, configure the Raspberry
----------------
+
 **Find the Pi**
 Well, there can be a number of possibility. 
 I use a tool like [Advanced IP Scanner](https://www.advanced-ip-scanner.com/)
@@ -34,7 +33,6 @@ Default credentials for a raspberry
 * wlan
 
 ## Update the embedded OS
----------------
 
 ```batch
 sudo apt-get update
@@ -61,7 +59,6 @@ Two options were tested:
 ### Install Matrix Software
 
 Note: As first snippet I have started from this hack on [hackster](https://www.hackster.io/matrix-labs/direction-of-arrival-for-matrix-voice-creator-using-odas-b7a15b)
-
 
 ```batch
 # Add repo and key
@@ -105,9 +102,13 @@ sudo reboot
 
 **TODO: alsa file in /etc/asound.conf should be modified for non blocking acquisition**
 
+---------------
+
 # SW
 
 ## RHASSPY
+
+[Project](https://rhasspy.readthedocs.io/en/latest/) [github](https://github.com/rhasspy/rhasspy)
 
 Several possibility are available, suggested for production is from [pre-compiled packages 32-bit and 64-bitt](https://rhasspy.readthedocs.io/en/latest/installation/#debian)
 Or for development with the [virtual-environment](https://rhasspy.readthedocs.io/en/latest/installation/#virtual-environment)
@@ -120,10 +121,9 @@ See the README in [repos](https://github.com/lawrence-iviani/rhasspy-lisa-odas-h
 
 ## ROS
 
-Just a placeholder, a specific module will be implemented seprately.
+Just a placeholder, a specific module will be implemented separately.
 
 [Installing ROS Melodic on the Raspberry Pi](http://wiki.ros.org/ROSberryPi/Installing%20ROS%20Melodic%20on%20the%20Raspberry%20Pi)
 
-
-
+Example of bridge [ROS MQTT bridge](http://wiki.ros.org/mqtt_bridge)
 
