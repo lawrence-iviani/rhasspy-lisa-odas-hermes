@@ -4,7 +4,7 @@ An input module of ODAS beamformed sources for Rhasspy  and a sensor with DOA ca
 
 This module is based on the rhasspy-pyaudio module and records audio from [ODAS](https://github.com/introlab/odas) and publishes WAV chunks according to the [Hermes protocol](https://docs.snips.ai/reference/hermes).
 Furthermore, specific messages for the DOA from ODAS of localized (potential) sources and tracked sources are produced.
-See https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/blob/master/lisa/rhasppy_messages.py
+See [lisa rhasppy messages](https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/blob/master/lisa/rhasppy_messages.py)
 
 # Run the module
 
@@ -57,8 +57,7 @@ NOTE: If you add things to the Docker image, make sure to whitelist them in `.do
 
 ## Command-Line Options
 
-Based on the pyaudio module, although they are tunable with several personalization they must be equal as defined in the ODAS revceiver. The default value are defined https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/blob/master/config_file/lisa.cfg
-And must match the ODAS configuration file as defined in the field [ODAS] odas_config.
+Based on the pyaudio module, although they are tunable with several personalization they must be equal as defined in the ODAS revceiver. The default values are defined in [config_file/lisa.cfg](https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/blob/master/config_file/lisa.cfg) and must match the ODAS configuration file as defined in the field [ODAS] odas_config.
 
 ```
 usage: rhasspy-lisa-odas-hermes [-h] [--sample-rate SAMPLE_RATE]
