@@ -47,6 +47,7 @@ pkgincludedir = $(includedir)/@PACKAGE_NAME@
 BUILD_DIR ?= $(srcdir)/build
 DOWNLOAD_DIR ?= $(srcdir)/download
 DO_DOWNLOAD ?= curl -sSfL -o
+ODAS_LIB ?= $(srcdir)/lisa-odas
 
 DOCKER_ARCH = @DOCKER_ARCH@
 
@@ -70,7 +71,8 @@ all: download-init build-init
 install: installdirs \
          install-init \
          install-dependencies \
-         install-service
+         install-service \
+		 install-odas
 
 install-init:
 ifeq ($(VIRTUALENV),yes)
@@ -90,6 +92,11 @@ else # IN_PLACE == yes
 	"$(INSTALL_PYTHON)" -m pip install $(PIP_INSTALL_ARGS) "$(srcdir)"
 endif # IN_PLACE == yes
 	chmod +x "$(srcdir)/rhasspy-lisa-odas-hermes"
+
+install-odas:
+	$(MKDIR_P) "$(ODAS_LIB)/build"
+	cd "$(ODAS_LIB)/build" && cmake ../ && make
+	
 
 # -----------------------------------------------------------------------------
 
@@ -113,6 +120,9 @@ endif
 clean:
 	"$(PYTHON)" setup.py clean
 	rm -rvf "$(BUILD_DIR)"
+	rm -rvf "$(ODAS_LIB)/build"
+	rm -rvf "$(ODAS_LIB)/lib"
+	rm -rvf "$(ODAS_LIB)/bin"
 
 
 # Clean up the output of configure
