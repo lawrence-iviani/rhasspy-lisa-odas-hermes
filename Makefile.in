@@ -63,16 +63,15 @@ else # VIRTUALENV == yes
   INSTALL_PYTHON=$(PYTHON)
 endif # VIRTUALENV == yes
 
-.PHONY: all install uninstall distclean clean dist check installdirs
+.PHONY: all install uninstall distclean clean dist check installdirs build-odas
 
-all: download-init build-init
+all: download-init build-init build-odas
 
 .PHONY: install-init install-dependencies install-service
 install: installdirs \
          install-init \
          install-dependencies \
-         install-service \
-		 install-odas
+         install-service 
 
 install-init:
 ifeq ($(VIRTUALENV),yes)
@@ -93,7 +92,13 @@ else # IN_PLACE == yes
 endif # IN_PLACE == yes
 	chmod +x "$(srcdir)/rhasspy-lisa-odas-hermes"
 
-install-odas:
+build-odas:
+ifneq ("$(wildcard $(ODAS_LIB))","")  
+	echo "$(ODAS_LIB) exists, delete it or call make distclean"  
+else  
+	git clone https://github.com/lawrence-iviani/lisa-odas.git 
+endif
+	# test ! -d $(ODAS_LIB) && 
 	$(MKDIR_P) "$(ODAS_LIB)/build"
 	cd "$(ODAS_LIB)/build" && cmake ../ && make
 	
@@ -107,7 +112,7 @@ download-init:
 .PHONY: build-init
 build-init:
 	$(MKDIR_P) "$(BUILD_DIR)"
-
+	
 # -----------------------------------------------------------------------------
 
 uninstall:
@@ -131,6 +136,7 @@ distclean:
 	rm -v "$(srcdir)/config.status"
 	rm -rvf "$(srcdir)/autom4te.cache"
 	rm -v "$(srcdir)/Makefile"
+	rm -v "$(ODAS_LIB)"
 
 # You can either use the setup.py sdist command or you can roll your own here
 dist:
