@@ -1,6 +1,6 @@
 # rhasspy-lisa-odas-hermes
 
-An input module of ODAS beamformed sources for Rhasspy  and a sensor with DOA capabilities and activity identification. In the direction of providing a more robust signal for  infering specific intents.
+An input module of ODAS beamformed sources for [Rhasspy](https://rhasspy.readthedocs.io/en/latest/#services)  and a sensor with DOA capabilities and activity identification. In the direction of providing a more robust signal to noise ratio for infering specific intents with rhasspy. 
 
 This module is based on the rhasspy-pyaudio module and records audio from [ODAS](https://github.com/introlab/odas) and publishes WAV chunks according to the [Hermes protocol](https://docs.snips.ai/reference/hermes).
 Furthermore, specific messages for the DOA from ODAS of localized (potential) sources and tracked sources are produced.
@@ -12,7 +12,7 @@ See [lisa rhasppy messages](https://github.com/lawrence-iviani/rhasspy-lisa-odas
 
 See [lisa-ODAS-receiver](https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/tree/master/lisa-odas/demo/lisa-ODAS-receiver)
 
-**VERY IMPORTANT, in all cases at today the lisa-odas library must be build separately **
+**VERY IMPORTANT, in all cases at today the lisa-odas library must be build separately**
 
 Adjustment in the path could be necessary
 
@@ -33,7 +33,6 @@ $ ./configure --enable-in-place
 $ make
 $ make install
 ```
-
 
 Run the `rhasspy-lisa-odas-hermes` script to access the command-line interface:
 
@@ -127,9 +126,7 @@ optional arguments:
 
 ## RHASSPY 
 
-Rhasspy (pronounced RAH-SPEE) is an open source, fully offline voice assistant toolkit for many languages that works well with Home Assistant, Hass.io, and Node-RED.
-
-https://rhasspy.readthedocs.io/en/latest/
+[Rhasspy](https://rhasspy.readthedocs.io/en/latest/) (pronounced RAH-SPEE) is an open source, fully offline voice assistant toolkit for many languages that works well with Home Assistant, Hass.io, and Node-RED.
 
 ## Speech Recognition
 
@@ -137,14 +134,11 @@ Part of rhasspy. This part will be moved
 
 ### KALDI 
 
-[Kaldi](https://kaldi-asr.org/)
-Kaldi is a toolkit for speech recognition, intended for use by speech recognition researchers and professionals. Find the code repository on [git](http://github.com/kaldi-asr/kaldi)
+[Kaldi](https://kaldi-asr.org/) is a toolkit for speech recognition, intended for use by speech recognition researchers and professionals. Find the code repository on [git](http://github.com/kaldi-asr/kaldi)
 
 ### DEEPSPEECH
 
-[Git DeepSpeech](https://github.com/mozilla/DeepSpeech)
-
-DeepSpeech is an open source Speech-To-Text engine, using a model trained by machine learning techniques based on Baidu's Deep Speech research paper. Project DeepSpeech uses Google's TensorFlow to make the implementation easier.
+[DeepSpeech](https://github.com/mozilla/DeepSpeech) is an open source Speech-To-Text engine, using a model trained by machine learning techniques based on Baidu's Deep Speech research paper. Project DeepSpeech uses Google's TensorFlow to make the implementation easier.
 
 Documentation for installation, usage, and training models is available on [deepspeech.readthedocs.io](http://deepspeech.readthedocs.io/?badge=latest)
 
