@@ -46,6 +46,7 @@ SAMPLE_RATE_INCOME_STREAM = int(config['INCOME_STREAM']['sample_rate'])
 ODAS_EXE = config['ODAS']['odas_exe']
 DEFAULT_ODAS_CONFIG = config['ODAS']['odas_config']
 BYTES_PER_SAMPLE_INCOME_STREAM = N_BITS_INCOME_STREAM // 8
+ODAS_RCV_CONFIG_FILE = config['ODAS']['odas_rcv_config']
 
 _LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
 
@@ -56,9 +57,9 @@ DEFAULT_VAD_AGGRESSIVENESS = 3
 # TODO: to be parametrized
 MEDIAN_WEIGHTS = [1/4, 1/2, 1/4]  # Set to none to skip, apply a median filter
 # BETWEEN 0..1 a little bit magic number actually
-ACTIVITY_THRESHOLD = 0.01 #  the min threshold for a source to being considered as tracked active (override a bit odas behavior)
+ACTIVITY_THRESHOLD = 0.01  #  the min threshold for a source to being considered as tracked active (override a bit odas behavior)
 ENERGY_THRESHOLD = 0.3  # The energy to be considered a potential localized source
-REFRESH_RATE = 10 # 20  # in hertz 10Hz -> 100ms, 20Hz -> 50ms, ... interval btw messages
+REFRESH_RATE = 10  # 20  # in hertz 10Hz -> 100ms, 20Hz -> 50ms, ... interval btw messages
 
 # Params for collecting queue from ODAS callbacks
 MAX_QUEUE_SIZE = 10
@@ -74,7 +75,7 @@ SST_latest = [None for _q in range(MAX_ODAS_SOURCES)]
 SSS_queue = None  # Decided at runtime
 
 # other options
-DEBUG_LOCALIZATION = False
+DEBUG_LOCALIZATION = False  # a number of debug prints with the
 
 
 ##########################
@@ -220,7 +221,8 @@ class LisaHermesMqtt(HermesClient):
         udp_audio_port: typing.Optional[int] = None,
         vad_mode: int = DEFAULT_VAD_AGGRESSIVENESS,
         demux: bool = False,
-        odas_config: str = DEFAULT_ODAS_CONFIG
+        odas_config: str = DEFAULT_ODAS_CONFIG,
+        odas_rcv_config: str = ODAS_RCV_CONFIG_FILE
     ):
         assert 0 < channels <= MAX_ODAS_SOURCES, "Invalid number of channels {}, max is {}".format(channels,
                                                                                                    MAX_ODAS_SOURCES)
@@ -246,7 +248,7 @@ class LisaHermesMqtt(HermesClient):
         self.subscribe(AudioGetDevices, SummaryToggleOn, SummaryToggleOff)
 
         self.sample_rate = sample_rate  # incoming stream
-        self.sample_width = sample_width # ODAS
+        self.sample_width = sample_width  # ODAS
 
         self.device_index = device_index
         self.chunk_size = chunk_size
@@ -254,6 +256,7 @@ class LisaHermesMqtt(HermesClient):
         self.output_site_id = output_site_id or self.site_id
         self.demux = demux
         self.odas_config = odas_config
+        self.odas_rcv_config = odas_rcv_config
 
         self.udp_audio_host = udp_audio_host
         self.udp_audio_port = udp_audio_port
@@ -285,6 +288,8 @@ class LisaHermesMqtt(HermesClient):
             self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             _LOGGER.debug("Audio will also be sent to UDP %s:%s", self.udp_audio_host, self.udp_audio_port,)
             self.subscribe(AsrStartListening, AsrStopListening)
+        _LOGGER.info("Firing threads for...")
+        print("+-+-+-+-+-+-+-+-+ ready for _thread_start_odas_switcher", _LOGGER.info)
         threading.Thread(target=self._thread_start_odas_switcher,  daemon=True).start()
         threading.Thread(target=self.publish_chunks, daemon=True).start()
         threading.Thread(target=self.record, daemon=True).start()
@@ -305,17 +310,17 @@ class LisaHermesMqtt(HermesClient):
             sleep(SLEEP_BEFORE_START_CLIENT)
             cmd = [ODAS_EXE, '-c', self.odas_config]
             p = Popen(cmd)
-            print(str(cmd) + " exit, " + str(p))
+            _LOGGER.info(str(cmd) + " exit, " + str(p))
 
         while not self._exit_requested:
+            _LOGGER.info("Starting  thread odas loop")
             threading.Thread(target=_delayed_odas_client, daemon=True).start()
-            print("Start odas main loop")
-            retval = lib_lisa_rcv.main_loop()
+            retval = lib_lisa_rcv.start_main_loop(self.odas_rcv_config.encode('utf-8'))
             # TODO: some time the odas subsystem crash, should be re-spawned here
             # note: crashed, but didnt exit. So probably is necessary a watch dog for p if exit?
             if not self._exit_requested:
-                print('TODO: this should not happen. Furthermore the thread is relaunched but with no effect.. Sleep? sync problem? who dies?')
-            print("Exit thread odas loop with {}".format(retval))
+                _LOGGER.error('TODO: this should not happen. Furthermore the thread is relaunched but with no effect.. Sleep? sync problem? who dies?')
+            _LOGGER.info("Exit thread odas loop with {}".format(retval))
 
     # -------------------------------------------------------------------------
     def _is_source_localized(self, ssl_src):
@@ -390,9 +395,9 @@ class LisaHermesMqtt(HermesClient):
                             source_id))  # stop processing if the main thread is done. this means data are not anymore a
                     if _acquire_streaming_id(position, _HIGHER_ID):  # source_id >= higher_id.value():
                         if self._is_source_tracked(position['SST']):
-                                # len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD:
                             self.chunk_queue.put(audio_chunk)
-                            # _print_localization(str(source_id) + '_Acquired Priority', position, audio_chunk)
+                            if DEBUG_LOCALIZATION:
+                                _print_localization(str(source_id) + '_Acquired Priority', position, audio_chunk)
                     else:
                         if DEBUG_LOCALIZATION:
                             _print_localization(str(source_id) + '_Discarded(Higher is ' + str(higher_id.value) +
@@ -449,7 +454,6 @@ class LisaHermesMqtt(HermesClient):
 
             except Exception as e:
                 _LOGGER.warning("Got an error recording -> {}".format(e))
-                # print("record, exception: " + str(e))
             finally:
                 if self.demux:
                     for _n in range(MAX_ODAS_SOURCES):

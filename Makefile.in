@@ -100,7 +100,8 @@ else
 endif
 	# test ! -d $(ODAS_LIB) && 
 	$(MKDIR_P) "$(ODAS_LIB)/build"
-	cd "$(ODAS_LIB)/build" && cmake ../ && make
+	cd "$(ODAS_LIB)/build" && cmake .. 
+	cd "$(ODAS_LIB)" && make
 	
 
 # -----------------------------------------------------------------------------

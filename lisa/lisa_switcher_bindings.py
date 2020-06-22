@@ -12,11 +12,13 @@ ODAS_RCV_LIB = config['ODAS']['library']
 
 pTag = ctypes.create_string_buffer(SST_TAG_LEN)
 
-
+####################################
+## Start the main loop and config ##
+####################################
 print("Open file RCV lib {} - {}".format(ODAS_RCV_LIB, os.path.dirname(__file__)))
 lib_lisa_rcv = npct.load_library(ODAS_RCV_LIB, os.path.dirname(__file__))
-lib_lisa_rcv.main_loop.restype = ctypes.c_int
-lib_lisa_rcv.main_loop.argtypes = None
+lib_lisa_rcv.start_main_loop.restype = ctypes.c_int
+lib_lisa_rcv.start_main_loop.argtypes = [ctypes.c_char_p]  # configuration file
 
 
 ##################

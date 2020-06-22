@@ -15,11 +15,15 @@ _LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
 def main():
     """Main method."""
 
+    # TODO: these should be imported as well
     # MAX_ODAS_SOURCES = int(config['INCOME_STREAM']['n_sources'])
     # CHUNK_SIZE_INCOME_STREAM = int(config['INCOME_STREAM']['chunk_size'])
+
+    # Get some of the default values (config file ovveride it)
     SAMPLE_RATE_INCOME_STREAM = int(config['INCOME_STREAM']['sample_rate'])
     BYTES_PER_SAMPLE_INCOME_STREAM = int(config['INCOME_STREAM']['n_bits']) // 8
     ODAS_CONFIG = (config['ODAS']['odas_config'])
+    ODAS_RCV_CONFIG_FILE = (config['ODAS']['odas_rcv_config'])
 
     parser = argparse.ArgumentParser(prog="rhasspy-lisa-odas-hermes")
     parser.add_argument(
@@ -38,7 +42,7 @@ def main():
         "--channels",
         type=int,
         default=1, # or MAX_ODAS_SOURCES,
-        help="Number of channels in recorded audio (e.g., 1)"
+        help="Number of channels in recorded audio (e.g. 1)"
     )
     parser.add_argument(
         "--demux",
@@ -60,14 +64,23 @@ def main():
         type=int,
         help="Send raw audio to UDP port outside ASR listening",
     )
+    # TODO: merge in one config all the odas params (lisa rcv + wrapper)
+    # TODO: reload from file with filename from argparse when merged
     parser.add_argument(
         "--odas-config",
         default=ODAS_CONFIG,
         help="ODAS configuration, default is: " + str(ODAS_CONFIG),
     )
+    parser.add_argument(
+        "--odas-rcv-config",
+        default=ODAS_RCV_CONFIG_FILE,
+        help="ODAS receiver configuration, default is: " + str(ODAS_RCV_CONFIG_FILE),
+    )
 
     hermes_cli.add_hermes_args(parser)
     args = parser.parse_args()
+    # TODO: reload if args.odas_config is not null, call load_configuration(file_name):
+
     hermes_cli.setup_logging(args)
     _LOGGER.debug(args)
 
@@ -94,6 +107,7 @@ def main():
         udp_audio_port=args.udp_audio_port,
         odas_config=args.odas_config,
         demux=args.demux,
+        odas_rcv_config=args.odas_rcv_config
     )
 
     _LOGGER.info("Connecting to %s:%s", args.host, args.port)
