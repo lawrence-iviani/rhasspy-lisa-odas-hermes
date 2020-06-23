@@ -10,7 +10,7 @@ See [lisa rhasppy messages](https://github.com/lawrence-iviani/rhasspy-lisa-odas
 
 ## Build ODAS
 
-See [lisa-ODAS-receiver](https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/tree/master/lisa-odas/demo/lisa-ODAS-receiver)
+See [lisa-ODAS-receiver](https://github.com/lawrence-iviani/lisa-odas)
 
 **VERY IMPORTANT, in all cases at today the lisa-odas library must be build separately**
 
