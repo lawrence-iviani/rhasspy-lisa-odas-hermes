@@ -47,6 +47,7 @@ pkgincludedir = $(includedir)/@PACKAGE_NAME@
 BUILD_DIR ?= $(srcdir)/build
 DOWNLOAD_DIR ?= $(srcdir)/download
 DO_DOWNLOAD ?= curl -sSfL -o
+ODAS_INIPARSE ?= $(srcdir)/lisa-odas/app/lisa-ODAS-receiver/iniparser
 ODAS_LIB ?= $(srcdir)/lisa-odas
 
 DOCKER_ARCH = @DOCKER_ARCH@
@@ -98,7 +99,9 @@ ifneq ("$(wildcard $(ODAS_LIB))","")
 else  
 	git clone https://github.com/lawrence-iviani/lisa-odas.git 
 endif
-	# test ! -d $(ODAS_LIB) && 
+	echo Building iniparse dependency
+	cd "$(ODAS_INIPARSE)" && make
+	echo Building odas-lisa 
 	$(MKDIR_P) "$(ODAS_LIB)/build"
 	cd "$(ODAS_LIB)/build" && cmake .. 
 	cd "$(ODAS_LIB)" && make
