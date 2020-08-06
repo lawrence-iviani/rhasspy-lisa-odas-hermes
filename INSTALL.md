@@ -70,6 +70,13 @@ sudo apt-get install cmake
 sudo apt-get install python3 python3-dev  python3-venv  sox alsa-utils build-essential portaudio19-dev 
 
 ```
+## Setup a hotspot wireless
+This is useful to control the board when the wired port is busy in an un-accessible network 
+https://www.raspberrypi.org/documentation/configuration/wireless/access-point-routed.md
+
+Network
+SSID: Lisa.wlan (this is also the address of the bot)
+password: L1sa@sc0lTa
 
 ## AUDIO HAT 
 
