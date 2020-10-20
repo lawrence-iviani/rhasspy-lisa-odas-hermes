@@ -29,6 +29,9 @@ Clone (including submodules) the repository and create the virtual environment:
 ```bash
 $ git clone --recurse-submodules https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes.git
 $ cd rhasspy-lisa-odas-hermes
+## rhasspy run in virtual env
+$ ./configure
+## or use the system environment
 $ ./configure --enable-in-place
 $ make
 $ make install
