@@ -12,7 +12,7 @@ See [lisa rhasppy messages](https://github.com/lawrence-iviani/rhasspy-lisa-odas
 
 See [lisa-ODAS-receiver](https://github.com/lawrence-iviani/lisa-odas)
 
-**VERY IMPORTANT, in all cases at today the lisa-odas library must be build separately**
+~~**VERY IMPORTANT, in all cases at today the lisa-odas library must be build separately**
 
 Adjustment in the path could be necessary
 
@@ -46,6 +46,7 @@ $ ./rhasspy-lisa-odas-hermes --help
 ## Building the Docker Image
 
 **NOT TESTED**
+
 Run `scripts/build-docker.sh` with a local docker registry:
 
 ```bash
