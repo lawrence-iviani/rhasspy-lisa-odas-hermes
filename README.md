@@ -24,10 +24,10 @@ $ docker run -it rhasspy/rhasspy-lisa-odas-hermes:<VERSION> <ARGS>
 
 ## Building From Source
 
-Clone the repository and create the virtual environment:
+Clone (including submodules) the repository and create the virtual environment:
 
 ```bash
-$ git clone https://github.com/rhasspy/rhasspy-lisa-odas-hermes.git
+$ git clone --recurse-submodules https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes.git
 $ cd rhasspy-lisa-odas-hermes
 $ ./configure --enable-in-place
 $ make
@@ -42,6 +42,7 @@ $ ./rhasspy-lisa-odas-hermes --help
 
 ## Building the Docker Image
 
+**NOT TESTED**
 Run `scripts/build-docker.sh` with a local docker registry:
 
 ```bash
