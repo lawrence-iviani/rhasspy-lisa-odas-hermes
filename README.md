@@ -16,7 +16,9 @@ See [lisa-ODAS-receiver](https://github.com/lawrence-iviani/lisa-odas)
 
 Adjustment in the path could be necessary
 
-## Running With Docker
+## Requirements
+
+* Python 3.7
 
 ```bash
 $ docker run -it rhasspy/rhasspy-lisa-odas-hermes:<VERSION> <ARGS>
@@ -33,6 +35,7 @@ $ cd rhasspy-lisa-odas-hermes
 $ ./configure
 ## or use the system environment
 $ ./configure --enable-in-place
+
 $ make
 $ make install
 ```
@@ -49,9 +52,20 @@ $ ./rhasspy-lisa-odas-hermes --help
 
 Run `scripts/build-docker.sh` with a local docker registry:
 
+## Deployment
+
 ```bash
-$ DOCKER_REGISTRY=myregistry:12345 scripts/build-docker.sh
+$ make dist
 ```
+
+## Running
+
+
+```bash
+$ bin/rhasspy-lisa-odas-hermes <ARGS>
+```
+
+
 
 Requires [Docker Buildx](https://docs.docker.com/buildx/working-with-buildx/). Set `PLATFORMS` environment to only build for specific platforms (e.g., `linux/amd64`).
 
@@ -59,11 +73,13 @@ This will create a Docker image tagged `rhasspy/rhasspy-lisa-odas-hermes:<VERSIO
 
 NOTE: If you add things to the Docker image, make sure to whitelist them in `.dockerignore`.
 
+
 ## Command-Line Options
 
 Based on the pyaudio module, although they are tunable with several personalization they must be equal as defined in the ODAS revceiver. The default values are defined in [config_file/lisa.cfg](https://github.com/lawrence-iviani/rhasspy-lisa-odas-hermes/blob/master/config_file/lisa.cfg) and must match the ODAS configuration file as defined in the field [ODAS] odas_config.
 
 ```
+
 usage: rhasspy-lisa-odas-hermes [-h] [--sample-rate SAMPLE_RATE]
                                 [--sample-width SAMPLE_WIDTH]
                                 [--channels CHANNELS] [--demux]
@@ -81,6 +97,7 @@ usage: rhasspy-lisa-odas-hermes [-h] [--sample-rate SAMPLE_RATE]
                                 [--tls-ciphers TLS_CIPHERS]
                                 [--site-id SITE_ID] [--debug]
                                 [--log-format LOG_FORMAT]
+
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -129,23 +146,6 @@ optional arguments:
 
 # SW References 
 
-## RHASSPY 
-
-[Rhasspy](https://rhasspy.readthedocs.io/en/latest/) (pronounced RAH-SPEE) is an open source, fully offline voice assistant toolkit for many languages that works well with Home Assistant, Hass.io, and Node-RED.
-
-## Speech Recognition
-
-Part of rhasspy. This part will be moved
-
-### KALDI 
-
-[Kaldi](https://kaldi-asr.org/) is a toolkit for speech recognition, intended for use by speech recognition researchers and professionals. Find the code repository on [git](http://github.com/kaldi-asr/kaldi)
-
-### DEEPSPEECH
-
-[DeepSpeech](https://github.com/mozilla/DeepSpeech) is an open source Speech-To-Text engine, using a model trained by machine learning techniques based on Baidu's Deep Speech research paper. Project DeepSpeech uses Google's TensorFlow to make the implementation easier.
-
-Documentation for installation, usage, and training models is available on [deepspeech.readthedocs.io](http://deepspeech.readthedocs.io/?badge=latest)
 
 #### Paper
 
