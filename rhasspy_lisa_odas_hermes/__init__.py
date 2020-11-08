@@ -34,7 +34,7 @@ from rhasspyhermes.audioserver import (
 from rhasspyhermes.base import Message
 from rhasspyhermes.client import GeneratorType, HermesClient
 
-
+from lisa.rhasppy_messages import SSL_src_msg, SST_src_msg
 from lisa.lisa_switcher_bindings import SSL_struct, SSL_src_struct, SST_struct, SST_src_struct
 from lisa.lisa_switcher_bindings import callback_SSL_func, callback_SST_func, callback_SSS_S_func, lib_lisa_rcv
 from lisa.lisa_configuration import config
@@ -475,7 +475,6 @@ class LisaHermesMqtt(HermesClient):
     def publish_odas(self):
         """Publish the latest ."""
 
-        from lisa.rhasppy_messages import SSL_src_msg, SST_src_msg
         try:
             while not self._exit_requested:
                 for _n in range(MAX_ODAS_SOURCES):
