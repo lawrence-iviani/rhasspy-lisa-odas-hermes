@@ -17,7 +17,7 @@ from sys import exit
 from time import sleep
 from _collections import deque
 from copy import deepcopy
-from subprocess import Popen
+import subprocess
 
 from rhasspyhermes.asr import AsrStartListening, AsrStopListening
 from rhasspyhermes.audioserver import (
@@ -36,8 +36,9 @@ from rhasspyhermes.client import GeneratorType, HermesClient
 
 from lisa.rhasppy_messages import SSL_src_msg, SST_src_msg
 from lisa.lisa_switcher_bindings import SSL_struct, SSL_src_struct, SST_struct, SST_src_struct
-from lisa.lisa_switcher_bindings import callback_SSL_func, callback_SST_func, callback_SSS_S_func, lib_lisa_rcv
+from lisa.lisa_switcher_bindings import callback_SSL_func, callback_SST_func, callback_SSS_S_func, get_lisa_reciever, unload_lisa_reciever
 from lisa.lisa_configuration import config
+
 
 MAX_ODAS_SOURCES = int(config['INCOME_STREAM']['n_sources'])
 N_BITS_INCOME_STREAM = int(config['INCOME_STREAM']['n_bits'])
@@ -63,7 +64,7 @@ REFRESH_RATE = 10  # 20  # in hertz 10Hz -> 100ms, 20Hz -> 50ms, ... interval bt
 
 # Params for collecting queue from ODAS callbacks
 MAX_QUEUE_SIZE = 10
-SLEEP_BEFORE_START_CLIENT = 0.5  # sec sync between odas tx/rx. The rx (server) is spawned first and then the tx
+SLEEP_BEFORE_START_CLIENT = 0.2  # sec sync between odas tx/rx. The rx (server) is spawned first and then the tx
 # TODO: change the MULTI_THREAD in something like DEMULTIPLEXER . THis means one source is selected (e.g latest it)
 # and streamed, reagardless the number of channel
 # MULTI_THREAD = False  # TODO: This influence also how the raw data  streaming are collected
@@ -277,9 +278,10 @@ class LisaHermesMqtt(HermesClient):
         self.summary_frames_left = self.summary_skip_frames
 
         # Register callbacks for ODAS streaming
-        lib_lisa_rcv.register_callback_SST(callback_SST)
-        lib_lisa_rcv.register_callback_SSL(callback_SSL)
-        lib_lisa_rcv.register_callback_SSS_S(callback_SSS_S)
+        self.lib_lisa_rcv = get_lisa_reciever()
+        self.lib_lisa_rcv.register_callback_SST(callback_SST)
+        self.lib_lisa_rcv.register_callback_SSL(callback_SSL)
+        self.lib_lisa_rcv.register_callback_SSS_S(callback_SSS_S)
 
         # Start threads
         self._exit_requested = False  # A flag to check if an exit is necessary
@@ -295,7 +297,6 @@ class LisaHermesMqtt(HermesClient):
         threading.Thread(target=self.record, daemon=True).start()
         threading.Thread(target=self.publish_odas, daemon=True).start()
 
-    # HERE something is wrong...
     @property
     def exit_request(self):
         _LOGGER.debug("Exit requested")
@@ -307,21 +308,28 @@ class LisaHermesMqtt(HermesClient):
 
     def _thread_start_odas_switcher(self):
         def _delayed_odas_client():
-            sleep(SLEEP_BEFORE_START_CLIENT)
             cmd = [ODAS_EXE, '-c', self.odas_config]
-            p = Popen(cmd)
-            _LOGGER.info(str(cmd) + " exit, " + str(p))
+            while not self._exit_requested:
+                sleep(SLEEP_BEFORE_START_CLIENT)
+                try:
+                    _LOGGER.info("thread_start_odas_switcher launcher: Starting: " + str(cmd))
+                    p = subprocess.run(cmd) # this stay until the process is finished, subprocess.Popen(cmd)  return immediately
+                except Exception  as e:
+                    _LOGGER.error('thread_start_odas_switcher launcher: Error in excuting ODAS subprocess: ' + str(e))
+                _LOGGER.info("thread_start_odas_switcher launcher: exit {}, odas process {}".format(p, "has exit normally." if self._exit_requested else "has crashed." ))
+            _LOGGER.info("thread_start_odas_switcher launcher: terminated")
 
-        while not self._exit_requested:
-            _LOGGER.info("Starting  thread odas loop")
-            threading.Thread(target=_delayed_odas_client, daemon=True).start()
-            retval = lib_lisa_rcv.start_main_loop(self.odas_rcv_config.encode('utf-8'))
-            # TODO: some time the odas subsystem crash, should be re-spawned here
-            # note: crashed, but didnt exit. So probably is necessary a watch dog for p if exit?
-            if not self._exit_requested:
-                _LOGGER.error('TODO: this should not happen. Furthermore the thread is relaunched but with no effect.. Sleep? sync problem? who dies?')
-            _LOGGER.info("Exit thread odas loop with {}".format(retval))
-
+        _LOGGER.info("Starting  thread odas loop")
+        th = threading.Thread(target=_delayed_odas_client)
+        th.start()
+        retval = self.lib_lisa_rcv.start_main_loop(self.odas_rcv_config.encode('utf-8'))
+        _LOGGER.info("Exit thread odas loop with {}".format(retval))
+        if not self._exit_requested:
+            _LOGGER.error('Main loop of lisa odas reciever exit without a pending exit request')      
+            if not th.is_alive():
+                _LOGGER.error('ODAS beamformer exit without a pending exit request')
+        elif th.is_alive():
+            _LOGGER.error('ODAS beamformer running although an exit request is pending')
     # -------------------------------------------------------------------------
     def _is_source_localized(self, ssl_src):
         """
