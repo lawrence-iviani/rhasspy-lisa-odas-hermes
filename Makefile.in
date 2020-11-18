@@ -104,7 +104,6 @@ endif
 	echo Building odas-lisa 
 	$(MKDIR_P) "$(ODAS_LIB)/build"
 	cd "$(ODAS_LIB)/build" && cmake .. 
-	cd "$(ODAS_LIB)" && make
 	
 
 # -----------------------------------------------------------------------------

@@ -582,7 +582,7 @@ PACKAGE_NAME='rhasspy-lisa-odas-hermes'
 PACKAGE_TARNAME='rhasspy-lisa-odas-hermes'
 PACKAGE_VERSION='0.1.0'
 PACKAGE_STRING='rhasspy-lisa-odas-hermes 0.1.0'
-PACKAGE_BUGREPORT='mike@rhasspy.org'
+PACKAGE_BUGREPORT='lawrence.iviani@gmail.com'
 PACKAGE_URL=''
 
 ac_default_prefix=$PWD/.venv
