@@ -3,7 +3,7 @@ import argparse
 import asyncio
 import logging
 import sys
-
+from os import path
 import paho.mqtt.client as mqtt
 import rhasspyhermes.cli as hermes_cli
 from lisa.lisa_configuration import config
@@ -47,9 +47,14 @@ def main():
     parser.add_argument(
         "--demux",
         action='store_const', const=True,
-        default=False,  # or MAX_ODAS_SOURCES,
+        default=False,  
         help="Stream always one channel out by selecting the one with higher priority (priority mode latest source). "
              "If channels is provided is then discarded and only one streamed"
+    )
+    parser.add_argument(
+        "--dump-detected",
+        default=None,  
+        help="If a proper path dir is provided a dump of the audio signal sent to Rhasspy is created. The file will contain the wave header"
     )
     parser.add_argument(
         "--output-site-id", help="If set, output audio data to a different site id"
@@ -93,7 +98,10 @@ def main():
         print("In demux mode mode only one channel is streamed, channels arguments ignored")
         _LOGGER.fatal("In demux mode mode only one channel is streamed, channels arguments is ignored")
         sys.exit(-2)
-
+    if args.dump_detected is not None:
+        if not path.isdir(args.dump_detected):
+            _LOGGER.fatal("A non existing folder for dump the output chunks is provided, but it is not a valid folder: " + str(args.dump_detected))
+            sys.exit(-3)
     # Listen for messages
     client = mqtt.Client()
     hermes = LisaHermesMqtt(
@@ -107,7 +115,8 @@ def main():
         udp_audio_port=args.udp_audio_port,
         odas_config=args.odas_config,
         demux=args.demux,
-        odas_rcv_config=args.odas_rcv_config
+        odas_rcv_config=args.odas_rcv_config,
+        dump_out_dir=args.dump_detected
     )
 
     _LOGGER.info("Connecting to %s:%s", args.host, args.port)

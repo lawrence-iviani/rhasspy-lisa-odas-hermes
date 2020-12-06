@@ -19,6 +19,14 @@ from _collections import deque
 from copy import deepcopy
 import subprocess
 
+# dump file
+USE_SOUNDFILE = True
+if USE_SOUNDFILE:
+    import soundfile as sf 
+else:
+    import wave
+
+
 from rhasspyhermes.asr import AsrStartListening, AsrStopListening
 from rhasspyhermes.audioserver import (
     AudioDevice,  # Returned in handle_get_devices
@@ -45,9 +53,11 @@ N_BITS_INCOME_STREAM = int(config['INCOME_STREAM']['n_bits'])
 CHUNK_SIZE_INCOME_STREAM = int(config['INCOME_STREAM']['chunk_size'])
 SAMPLE_RATE_INCOME_STREAM = int(config['INCOME_STREAM']['sample_rate'])
 ODAS_EXE = config['ODAS']['odas_exe']
-DEFAULT_ODAS_CONFIG = config['ODAS']['odas_config']
 BYTES_PER_SAMPLE_INCOME_STREAM = N_BITS_INCOME_STREAM // 8
+DEFAULT_ODAS_CONFIG = config['ODAS']['odas_config']
 ODAS_RCV_CONFIG_FILE = config['ODAS']['odas_rcv_config']
+DUMP_CALLBACK = False#  True  # TODO: config['INCOME_STREAM']['dump_enter_stream'])
+
 
 _LOGGER = logging.getLogger("rhasspy-lisa-odas-hermes")
 
@@ -77,6 +87,37 @@ SSS_queue = None  # Decided at runtime
 
 # other options
 DEBUG_LOCALIZATION = False  # a number of debug prints with the
+
+
+################################
+## functions for file dumping ##
+################################
+def open_wave_file(filename, sample_rate, sample_width, channels):
+    # filename_dump_callback = '/home/pi/callback_dump_file.wav'
+    assert channels > 0 and isinstance(channels, int), "Channels are in the wrong format"
+    if channels > 1:
+        wavefile = []
+	
+    for c in range(channels):
+        _f = filename+"_"+str(c+1)+".wav"
+        if USE_SOUNDFILE:			
+        	# TODO: sample_width is ignored and set to 16 bits! this is a problem if the format change
+            # wf = sf.SoundFile(_f, mode='w',  samplerate=int(sample_rate), channels=channels, format='WAV', subtype="PCM_16")			
+            wf = sf.SoundFile(_f, mode='w',  samplerate=int(sample_rate), channels=1, format='WAV', subtype="PCM_16")	
+            print("Dump to file: {} sample_rate={}, n_frames={}, n_channels={}".format(_f,
+        	             wf.samplerate, wf.frames, 1))#wf.channels))
+        else:
+            wf = wave.open(_f,'w')
+            wf.setnchannels(1)#channels)
+            wf.setsampwidth(sample_width) 
+            wf.setframerate(sample_rate)
+            print("Dump to file: {} sample_rate={}, n_frames={}, n_channels={}".format(_f,
+                          wf.getframerate(), wf.getnframes(), wf.getnchannels()))
+        if channels==1:
+            wavefile = wf
+        else:
+            wavefile.append(wf)
+    return wavefile
 
 
 ##########################
@@ -143,6 +184,12 @@ def callback_SST(pSST_struct):
             pass
 
 
+if DUMP_CALLBACK:
+    dump_callback_file = open_wave_file('/home/pi/dump_callback', SAMPLE_RATE_INCOME_STREAM, BYTES_PER_SAMPLE_INCOME_STREAM, MAX_ODAS_SOURCES)
+else:
+	dump_callback_file = None
+
+
 @callback_SSS_S_func
 def callback_SSS_S(n_bytes, x):
     """"
@@ -163,9 +210,16 @@ def callback_SSS_S(n_bytes, x):
                     _idh = _idl + CHUNK_SIZE_INCOME_STREAM
                     _ch_buf = buf[_idl:_idh, i]
                     # print("extract buffer source {} - frame {}. 3 samples  {} ...".format(i, _fr, _ch_buf[0:3]))
-                    SSS_queue[i].put_nowait(
-                        _ch_buf)  # eventually_ch_buf this has to be transformed in bytes or store as a byte IO?
-                # manage full queue is required?
+                    SSS_queue[i].put_nowait(_ch_buf)  # eventually_ch_buf this has to be transformed in bytes or store as a byte IO?
+                    if DUMP_CALLBACK:
+                        # write_wave(dump_callback_file[i], buf)
+                        if USE_SOUNDFILE:
+                            #dump_callback_file[i].write(_ch_buf)#, np.int16)	# removing header! #
+                            _bb = _ch_buf.copy() # need to create a copy, to make the array contiguos, otherwise i get an exception
+                            dump_callback_file[i].write(_bb)
+                        else:
+							# Solution wave, this write always the latest buffer and doesnt happend it!
+                            dump_callback_file[i].writeframesraw(_ch_buf) # removing header!	
             except Full:
                 _LOGGER.warning("SSS_S receiving Queue_" + str(i) + " is Full, skipping frame (TODO: lost for now, change in deque!)")
                 # do nothing for now, perhaps extract the first to make space? Kind of circular queue behavior.....
@@ -173,6 +227,8 @@ def callback_SSS_S(n_bytes, x):
     else:
         try:
             SSS_queue.put_nowait(buf)
+            if DUMP_CALLBACK:
+                write_wave(dump_callback_file, buf)
         except Full:
             _LOGGER.warning("SSS_S receiving Queue is Full, skipping frame (TODO: lost for now, change in deque!)")
             # do nothing for now, perhaps extract the first to make space? Kind of circular queue behavior.....
@@ -223,7 +279,8 @@ class LisaHermesMqtt(HermesClient):
         vad_mode: int = DEFAULT_VAD_AGGRESSIVENESS,
         demux: bool = False,
         odas_config: str = DEFAULT_ODAS_CONFIG,
-        odas_rcv_config: str = ODAS_RCV_CONFIG_FILE
+        odas_rcv_config: str = ODAS_RCV_CONFIG_FILE,
+		dump_out_dir: typing.Optional[str] = None
     ):
         assert 0 < channels <= MAX_ODAS_SOURCES, "Invalid number of channels {}, max is {}".format(channels,
                                                                                                    MAX_ODAS_SOURCES)
@@ -266,6 +323,10 @@ class LisaHermesMqtt(HermesClient):
 
         self.chunk_queue: Queue = Queue()
 
+        _LOGGER.info("Start LisaHermesMqtt with incoming sample_rate={}, sample_width={}, chunk_size={}, frames_per_buffer={} - Sources: {}".format(
+					 self.sample_rate, self.sample_width, self.chunk_size, self.frames_per_buffer, 
+					 "Demux is active, inputting one channel (priority is latest ID)" if self.demux else "Inputing up to {} concurrent channels".format(self.channels)))
+
         # Send audio summaries
         self.enable_summary = False
         self.vad: typing.Optional[webrtcvad.Vad] = None
@@ -277,7 +338,27 @@ class LisaHermesMqtt(HermesClient):
         self.summary_skip_frames = 5
         self.summary_frames_left = self.summary_skip_frames
 
-        # Register callbacks for ODAS streaming
+        # Dump buffer to file, for debug purpose
+        self._dump_file = None
+        # dump_wave_buffer = True # TODO: must be a command line option
+        filename = None
+        if dump_out_dir is not None:
+            filename = dump_out_dir + '/dump_out'
+        if filename is not None and len(filename):
+            self._dump_file = open_wave_file(filename, sample_rate, sample_width, channels)
+            # if USE_SOUNDFILE:			
+                # self._dump_file = sf.SoundFile(filename, mode='w',  samplerate=int(sample_rate), channels=self.channels, format='WAV', subtype="PCM_16")			
+                # _LOGGER.info("Dump to file: sample_rate={}, n_frames={}, n_channels={}".format(
+				             # self._dump_file.samplerate, self._dump_file.frames, self._dump_file.channels))
+            # else:
+                # self._dump_file = wave.open(filename,'w')
+                # self._dump_file.setnchannels(self.channels)
+                # self._dump_file.setsampwidth(sample_width) 
+                # self._dump_file.setframerate(sample_rate)
+                # _LOGGER.info("Dump to file: sample_rate={}, n_frames={}, n_channels={}".format(
+                             # self._dump_file.getframerate(), self._dump_file.getnframes(), self._dump_file.getnchannels()))	
+
+        # Register callbacks for ODAS streaming	
         self.lib_lisa_rcv = get_lisa_reciever()
         self.lib_lisa_rcv.register_callback_SST(callback_SST)
         self.lib_lisa_rcv.register_callback_SSL(callback_SSL)
@@ -290,13 +371,19 @@ class LisaHermesMqtt(HermesClient):
             self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             _LOGGER.debug("Audio will also be sent to UDP %s:%s", self.udp_audio_host, self.udp_audio_port,)
             self.subscribe(AsrStartListening, AsrStopListening)
-        _LOGGER.info("Firing threads for...")
-        print("+-+-+-+-+-+-+-+-+ ready for _thread_start_odas_switcher", _LOGGER.info)
         threading.Thread(target=self._thread_start_odas_switcher,  daemon=True).start()
         threading.Thread(target=self.publish_chunks, daemon=True).start()
         threading.Thread(target=self.record, daemon=True).start()
         threading.Thread(target=self.publish_odas, daemon=True).start()
 
+    def __del__(self):
+        if dump_callback_file is not None:
+            _LOGGER.info("Closing dump recieved file")
+            dump_callback_file.close()
+        if self._dump_file is not None:
+            _LOGGER.info("Closing dump output file")
+            self._dump_file.close()
+		
     @property
     def exit_request(self):
         _LOGGER.debug("Exit requested")
@@ -304,6 +391,7 @@ class LisaHermesMqtt(HermesClient):
 
     @exit_request.setter
     def exit_request(self, value):
+
         self._exit_requested = value
 
     def _thread_start_odas_switcher(self):
@@ -376,7 +464,7 @@ class LisaHermesMqtt(HermesClient):
             if len(p[1].tag) or p[1].activity > ACTIVITY_THRESHOLD:
                 _print(n, p, audio_chunk)
 
-        def _acquire_streaming_id(position, higher_id):
+        def _acquire_streaming_id(position):#, higher_id):
             """Determine the stream with the higher id (latest)
                 TODO: here could stay the speaker identification process? How?"""
             if position['SST'] is not None and self._is_source_tracked(position['SST']): # position['SST'] is not None and (len(position['SST'][1].tag) or position['SST'][1].activity > ACTIVITY_THRESHOLD):
@@ -401,7 +489,7 @@ class LisaHermesMqtt(HermesClient):
                     if audio_chunk is None:
                         raise Exception("Received buffer none for source_id_{}".format(
                             source_id))  # stop processing if the main thread is done. this means data are not anymore a
-                    if _acquire_streaming_id(position, _HIGHER_ID):  # source_id >= higher_id.value():
+                    if _acquire_streaming_id(position): #, _HIGHER_ID):  # source_id >= higher_id.value():
                         if self._is_source_tracked(position['SST']):
                             self.chunk_queue.put(audio_chunk)
                             if DEBUG_LOCALIZATION:
@@ -555,7 +643,15 @@ class LisaHermesMqtt(HermesClient):
                                 AudioFrame(wav_bytes=wav_bytes),
                                 site_id=self.output_site_id,
                             )
-
+                        if self._dump_file is not None:
+                            # print("tell is", self._dump_file.tell(), end=' ') 
+                            # write_wave( self._dump_file, wav_bytes, remove_header=True)
+                            if USE_SOUNDFILE:
+								# soultion soundfile
+                                self._dump_file.write(np.frombuffer(wav_bytes[44:], np.int16))	# removing header!
+                            else:
+								# Solution wave, this write always the latest buffer and doesnt happend it!
+                                self._dump_file.writeframesraw(wav_bytes[44:]) # removing header!					
                     if self.enable_summary:
                         self.summary_frames_left -= 1
                         if self.summary_frames_left > 0:
